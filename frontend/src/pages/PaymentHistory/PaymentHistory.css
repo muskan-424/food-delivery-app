@@ -1,0 +1,150 @@
+.payment-history-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 100px auto 50px;
+}
+
+.payment-history-page h2 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #454545;
+  margin-bottom: 30px;
+}
+
+.payment-history-card {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.payment-history-card p {
+  font-size: 16px;
+  color: #666;
+}
+
+.payments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.payment-card {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s;
+}
+
+.payment-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.payment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.payment-info h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #454545;
+  margin: 0 0 5px 0;
+}
+
+.payment-date {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.payment-amount {
+  text-align: right;
+}
+
+.payment-amount h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #454545;
+  margin: 0 0 10px 0;
+}
+
+.payment-status {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.payment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #666;
+  font-size: 14px;
+}
+
+.detail-value {
+  color: #454545;
+  font-size: 14px;
+  text-align: right;
+}
+
+.detail-value.error {
+  color: #F44336;
+}
+
+.refund-details {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  border-left: 4px solid #9C27B0;
+}
+
+@media (max-width: 768px) {
+  .payment-history-page {
+    padding: 15px;
+    margin-top: 80px;
+  }
+
+  .payment-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .payment-amount {
+    text-align: left;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .detail-value {
+    text-align: left;
+  }
+}
+

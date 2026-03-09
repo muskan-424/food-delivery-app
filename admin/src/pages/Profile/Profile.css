@@ -1,0 +1,129 @@
+.admin-profile-page{
+    padding: 30px;
+}
+
+.admin-profile-page h2{
+    margin-bottom: 20px;
+    color: #2f2f2f;
+}
+
+.admin-profile-card{
+    background: #fff;
+    border: 1px solid #e6e6e6;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.admin-profile-card h3{
+    margin-top: 0;
+}
+
+.admin-profile-avatar{
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+}
+
+.admin-profile-avatar img,
+.avatar-placeholder{
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #ffe0d9;
+    background: #fff4f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    font-weight: 700;
+    color: #ff7043;
+}
+
+.upload-btn{
+    background: #ff7043;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 24px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.3s;
+}
+
+.upload-btn input{
+    display: none;
+}
+
+.upload-btn:disabled{
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-profile-form{
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.form-group{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label{
+    font-size: 14px;
+    color: #555;
+    font-weight: 500;
+}
+
+.form-group input{
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+}
+
+.form-group input:focus{
+    border-color: #ff7043;
+    outline: none;
+    background: #fff;
+}
+
+.save-btn{
+    grid-column: 1 / -1;
+    background: #ff7043;
+    border: none;
+    color: #fff;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: opacity 0.3s;
+}
+
+.save-btn:disabled{
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 900px){
+    .admin-profile-card{
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .admin-profile-form{
+        width: 100%;
+    }
+}
+
+

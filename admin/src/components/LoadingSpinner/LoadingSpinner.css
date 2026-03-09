@@ -1,0 +1,94 @@
+.admin-loading-spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.admin-loading-spinner-container.small {
+  padding: 10px;
+}
+
+.admin-loading-spinner-container.large {
+  padding: 40px;
+  min-height: 200px;
+}
+
+.admin-loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-loading-spinner.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #ff6b6b;
+  border-radius: 50%;
+  animation: admin-spin 1s linear infinite;
+}
+
+.admin-spinner.small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.admin-spinner.medium {
+  width: 40px;
+  height: 40px;
+  border-width: 4px;
+}
+
+.admin-spinner.large {
+  width: 60px;
+  height: 60px;
+  border-width: 6px;
+}
+
+.admin-loading-message {
+  margin-top: 12px;
+  color: #666;
+  font-size: 14px;
+  text-align: center;
+}
+
+.admin-loading-spinner-container.small .admin-loading-message {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.admin-loading-spinner-container.large .admin-loading-message {
+  font-size: 16px;
+  margin-top: 16px;
+}
+
+.admin-loading-spinner.inline .admin-loading-message {
+  margin-top: 0;
+  font-size: 14px;
+}
+
+@keyframes admin-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Button loading state */
+.admin-btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.admin-btn-loading .admin-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  margin-right: 8px;
+}

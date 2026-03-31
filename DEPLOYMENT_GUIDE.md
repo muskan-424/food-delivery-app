@@ -1,16 +1,15 @@
 # 🚀 Deployment Guide
 
-This guide covers all deployment options for the Food Delivery application, from development setup to production deployment with CI/CD pipelines.
+This guide covers deployment options for the Food Delivery application, from local development to production.
 
 ## 📋 Table of Contents
 
 1. [Quick Start](#quick-start)
 2. [Development Setup](#development-setup)
 3. [Docker Deployment](#docker-deployment)
-4. [CI/CD Pipeline](#cicd-pipeline)
-5. [Production Deployment](#production-deployment)
-6. [Environment Configuration](#environment-configuration)
-7. [Monitoring and Maintenance](#monitoring-and-maintenance)
+4. [Production Deployment](#production-deployment)
+5. [Environment Configuration](#environment-configuration)
+6. [Monitoring and Maintenance](#monitoring-and-maintenance)
 
 ---
 
@@ -148,62 +147,6 @@ docker-compose down -v
 
 ---
 
-## 🔄 CI/CD Pipeline
-
-### GitHub Actions Workflows
-
-The project includes comprehensive CI/CD pipelines:
-
-#### 1. **Main CI/CD Pipeline** (`.github/workflows/ci-cd.yml`)
-- **Triggers**: Push to `main`/`develop`, Pull Requests
-- **Jobs**:
-  - Backend testing with MongoDB
-  - Frontend build and test
-  - Admin panel build and test
-  - Security scanning
-  - Automated deployment (main branch only)
-
-#### 2. **Pull Request Checks** (`.github/workflows/pr-check.yml`)
-- **Triggers**: Pull Requests
-- **Jobs**:
-  - File validation
-  - Lint and format checking
-  - Documentation completeness
-  - Bundle size analysis
-
-#### 3. **Docker Build** (`.github/workflows/docker-build.yml`)
-- **Triggers**: Push to `main`/`develop`, Tags
-- **Jobs**:
-  - Multi-service Docker builds
-  - Container registry push
-  - Security vulnerability scanning
-
-#### 4. **Staging Deployment** (`.github/workflows/deploy-staging.yml`)
-- **Triggers**: Push to `develop`, Manual dispatch
-- **Jobs**:
-  - Staging environment deployment
-  - Artifact creation for manual deployment
-
-### Setting Up CI/CD
-
-1. **Repository Secrets**
-   ```
-   PRODUCTION_API_URL=https://your-api.com
-   STAGING_API_URL=https://staging-api.com
-   STAGING_FRONTEND_URL=https://staging.com
-   ```
-
-2. **Environment Protection Rules**
-   - Set up branch protection for `main`
-   - Require PR reviews
-   - Enable status checks
-
-3. **Deployment Environments**
-   - Create `staging` and `production` environments in GitHub
-   - Configure environment-specific secrets
-
----
-
 ## 🌐 Production Deployment
 
 ### Option 1: Cloud Platforms (Recommended)
@@ -250,7 +193,7 @@ The project includes comprehensive CI/CD pipelines:
 #### **Railway Deployment**
 
 1. **One-Click Deploy**
-   - Connect GitHub repository
+   - Connect your Git repository in the Railway dashboard
    - Railway auto-detects services
    - Configure environment variables
 
@@ -511,7 +454,7 @@ VITE_ADMIN_TOKEN_REFRESH_INTERVAL=300000
 
 - **Documentation**: Check README.md and setup guides
 - **Logs**: Always check application and system logs first
-- **GitHub Issues**: Report bugs and feature requests
+- **Issue tracker**: Report bugs and feature requests in your repository or project tool
 - **Community**: Join discussions and get help
 
 ---
@@ -520,9 +463,7 @@ VITE_ADMIN_TOKEN_REFRESH_INTERVAL=300000
 
 - [Setup and Run Guide](SETUP_AND_RUN_GUIDE.md)
 - [Project Features Documentation](PROJECT_FEATURES_DOCUMENTATION.md)
-- [Backend Fixes Applied](backend/BACKEND_FIXES_APPLIED.md)
-- [Frontend Fixes Applied](frontend/FRONTEND_FIXES_APPLIED.md)
-- [Admin Fixes Applied](admin/ADMIN_FIXES_APPLIED.md)
+- [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
 
 ---
 

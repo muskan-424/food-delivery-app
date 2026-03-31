@@ -7,6 +7,15 @@ This repository hosts the source code for TOMATO, a dynamic food ordering websit
 - User Panel: [https://food-delivery-frontend-s2l9.onrender.com/](https://food-delivery-frontend-s2l9.onrender.com/)
 - Admin Panel: [https://food-delivery-admin-wrme.onrender.com/](https://food-delivery-admin-wrme.onrender.com/)
 
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [SETUP_AND_RUN_GUIDE.md](SETUP_AND_RUN_GUIDE.md) | Local setup, env vars, Docker |
+| [PROJECT_FEATURES_DOCUMENTATION.md](PROJECT_FEATURES_DOCUMENTATION.md) | Feature reference |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Deploy to cloud/VPS/Docker |
+| [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) | Phased plan for advanced capabilities |
+
 ## Features
 
 ### Core Features
@@ -50,14 +59,10 @@ This repository hosts the source code for TOMATO, a dynamic food ordering websit
 - ✅ **Currency** - All prices displayed in Indian Rupees (INR)
 
 ### DevOps & Deployment Features (New!)
-- ✅ **Complete CI/CD Pipeline** - GitHub Actions workflows for automated testing and deployment
 - ✅ **Docker Containerization** - Multi-service Docker setup with Docker Compose
-- ✅ **Environment Management** - Comprehensive environment configuration for dev/staging/production
-- ✅ **Security Scanning** - Automated vulnerability scanning and dependency auditing
-- ✅ **Branch Protection** - Automated code quality checks and review requirements
+- ✅ **Environment Management** - Environment configuration for dev/staging/production
 - ✅ **Deployment Scripts** - Cross-platform deployment automation (Linux/Windows)
 - ✅ **Health Monitoring** - Application health checks and monitoring setup
-- ✅ **Release Management** - Automated release creation and artifact management
 
 ## Screenshots
 
@@ -252,44 +257,16 @@ Start the Admin Panel
 
 ## DevOps & Deployment
 * [Docker](https://www.docker.com/) - Containerization
-* [GitHub Actions](https://github.com/features/actions) - CI/CD Pipeline
 * [Nginx](https://nginx.org/) - Reverse Proxy & Load Balancing
 * [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) - Cloud Database
 
-## CI/CD Pipeline
-
-This project includes a comprehensive CI/CD pipeline with GitHub Actions:
-
-### 🔄 Automated Workflows
-- **Continuous Integration**: Automated testing for backend, frontend, and admin
-- **Security Scanning**: Dependency vulnerability scanning and code analysis
-- **Docker Building**: Multi-service container image building and registry push
-- **Staging Deployment**: Automatic deployment to staging environment
-- **Production Deployment**: Controlled production deployment with approvals
-
-### 🛡️ Quality Gates
-- **Code Quality**: ESLint, Prettier, and syntax validation
-- **Security**: Automated security audits and vulnerability scanning
-- **Testing**: Comprehensive test suite execution
-- **Bundle Analysis**: Build size monitoring and optimization
-
-### 📦 Deployment Options
-- **Development**: Local development with hot reload
-- **Docker**: Containerized deployment with Docker Compose
-- **Cloud**: Ready for deployment on Render, Vercel, Railway, etc.
-- **VPS**: Manual deployment scripts for virtual private servers
-
-### 🔧 Getting Started with CI/CD
-1. Fork/clone this repository
-2. Set up GitHub repository secrets (see [GitHub Setup Guide](GITHUB_SETUP_GUIDE.md))
-3. Configure branch protection rules
-4. Push to `develop` branch to trigger staging deployment
-5. Create PR to `main` for production deployment
+Deploy using Docker, cloud platforms (e.g. Render), or the scripts in `DEPLOYMENT_GUIDE.md`.
 
 For detailed setup instructions, see:
-- [GitHub Setup Guide](GITHUB_SETUP_GUIDE.md) - Complete GitHub configuration
-- [Deployment Guide](DEPLOYMENT_GUIDE.md) - All deployment options
-- [Setup and Run Guide](SETUP_AND_RUN_GUIDE.md) - Local development setup
+- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Deployment options
+- [Setup and Run Guide](SETUP_AND_RUN_GUIDE.md) - Local development
+- [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md) - Planned advanced features
+- [Project Features](PROJECT_FEATURES_DOCUMENTATION.md) - Feature reference
 
 ## Deployment
 

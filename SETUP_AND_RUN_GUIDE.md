@@ -2,8 +2,8 @@
 
 Complete step-by-step guide to set up and run the Food Delivery application locally.
 
-> **📚 For complete feature documentation, see `PROJECT_FEATURES_DOCUMENTATION.md`**
-> **📊 For feature comparison, see `PROJECT_COMPARISON_ANALYSIS.md`**
+> **📚 For feature documentation, see `PROJECT_FEATURES_DOCUMENTATION.md`**  
+> **🗺️ For advanced-features roadmap, see `IMPLEMENTATION_ROADMAP.md`**
 
 ## 📋 Prerequisites
 
@@ -14,6 +14,8 @@ Before you begin, ensure you have the following installed:
 - **MongoDB** - Either:
   - MongoDB Atlas (Cloud - Recommended) - [Sign up](https://www.mongodb.com/cloud/atlas)
   - MongoDB Community Edition (Local) - [Download](https://www.mongodb.com/try/download/community)
+- **Redis** (optional for local Node.js runs) - Only if you want shared/distributed rate limits locally. Docker Compose includes Redis automatically.
+- **Docker Desktop** (optional) - Only if you use the containerized setup below
 - **Git** (if cloning from repository)
 
 ---
@@ -30,6 +32,7 @@ npm install
 This will install all required packages including:
 - express-validator
 - express-rate-limit
+- rate-limit-redis and ioredis (optional Redis-backed rate limiting when `REDIS_URL` is set)
 - helmet
 - sentiment (for AI-powered review analysis)
 - And all other dependencies
@@ -94,6 +97,11 @@ ENABLE_SCHEDULED_JOBS=true
 
 # Server Port (optional, defaults to 4000)
 PORT=4000
+
+# Redis (optional — omit for in-memory rate limits)
+# Local Redis:
+# REDIS_URL=redis://localhost:6379
+# Docker Compose sets this in the project root .env (see Docker section)
 ```
 
 ### 🔑 Getting Your Keys:
@@ -124,6 +132,10 @@ PORT=4000
    - Multiple payment methods supported (UPI, Cards, Wallets, Net Banking, COD)
    - No external payment gateway required
    - All payments tracked internally
+
+5. **Redis (`REDIS_URL`)**:
+   - **Not required** for local development: if you leave `REDIS_URL` unset, API rate limits use in-memory storage (fine for a single server process).
+   - **Set `REDIS_URL`** when you run Redis locally or use Docker Compose (Compose provides Redis and sets this for the backend container).
 
 ---
 
@@ -232,6 +244,67 @@ VITE v4.x.x  ready in xxx ms
 
 ---
 
+## 🐳 Docker Compose (full stack alternative)
+
+Use this when you want MongoDB, Redis, backend, frontend, admin, and nginx all running in containers. **Compose reads environment from a `.env` file in the project root** (not `backend/.env`).
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine + Compose on Linux
+- Enough disk/RAM for MongoDB + Redis + Node images
+
+### 1. Root environment file
+
+From the **repository root** (folder that contains `docker-compose.yml`):
+
+1. Copy the template:  
+   `cp .env.docker .env`  
+   On Windows PowerShell: `Copy-Item .env.docker .env`
+2. Edit **`.env`** and replace every placeholder (MongoDB root user/password, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, email credentials, etc.).  
+3. **`REDIS_URL`** is already set for Compose (`redis://redis:6379`). Change it only if you use an external Redis.
+
+### 2. Build and start
+
+```bash
+# From project root
+docker compose up -d --build
+```
+
+Services (default ports):
+
+| Service   | Port (host) | Notes                          |
+|----------|-------------|--------------------------------|
+| Backend  | 4000        | API                            |
+| Frontend | 3000        | User app (nginx inside image)  |
+| Admin    | 3001        | Admin panel                    |
+| MongoDB  | 27017       | Optional external access       |
+| Redis    | 6379        | Optional external access       |
+| Nginx    | 80, 443     | Reverse proxy (if used)        |
+
+### 3. API URL for browsers
+
+If the user’s browser loads the frontend from `http://localhost:3000`, the frontend must call an API URL it can reach. For local Docker, **`VITE_API_URL` in root `.env`** is often `http://localhost:4000` (already typical in `.env.docker`). Adjust if you use another host or HTTPS.
+
+### 4. First admin (inside backend container)
+
+```bash
+docker compose exec backend npm run create-admin
+```
+
+### 5. Useful commands
+
+```bash
+docker compose ps
+docker compose logs -f backend
+docker compose down          # stop containers
+docker compose down -v       # stop and remove volumes (wipes DB/Redis data)
+```
+
+After pulling changes that add npm packages, rebuild the backend image:  
+`docker compose build --no-cache backend` or `docker compose up -d --build`.
+
+---
+
 ## ✅ Step 6: Verify Everything Works
 
 ### Test Backend API:
@@ -239,15 +312,25 @@ VITE v4.x.x  ready in xxx ms
 1. Open browser and go to: `http://localhost:4000`
 2. You should see: `{"success":true,"message":"API Working"}`
 
+### Health check (MongoDB + Redis when configured):
+
+1. Open: `http://localhost:4000/api/health`
+2. You should see JSON with `"mongo": "connected"` and `"redis": "ok"` (Docker) or `"redis": "disabled"` (local Node without `REDIS_URL`).  
+3. HTTP **503** means MongoDB or required Redis is not ready; wait a few seconds after `docker compose up` and retry.
+
 ### Test Frontend:
 
-1. Open: `http://localhost:5173` (or the port shown in terminal)
-2. You should see the food delivery homepage
+1. **Local dev:** Open `http://localhost:5173` (or the port shown in terminal).  
+2. **Docker:** Open `http://localhost:3000` (user app is published on port 3000).
+
+You should see the food delivery homepage.
 
 ### Test Admin Panel:
 
-1. Open: `http://localhost:5174` (or the port shown in terminal)
-2. You should see the admin login page
+1. **Local dev:** Open `http://localhost:5174` (or the port shown in terminal).  
+2. **Docker:** Open `http://localhost:3001`.
+
+You should see the admin login page.
 
 ---
 
@@ -319,9 +402,11 @@ Create admin account for "admin@example.com"? (y/N): y
 ### 🔒 Security Features (New)
 
 The project now includes enhanced security:
-- **Rate Limiting**: Prevents brute force attacks
-  - Auth endpoints: 5 requests per 15 minutes
-  - Order placement: 10 requests per minute
+- **Rate Limiting**: Prevents brute force attacks  
+  - **With `REDIS_URL` set** (Docker Compose or local Redis): limits are stored in Redis so multiple backend instances share the same counters.  
+  - **Without `REDIS_URL`**: limits are in-memory (per Node process).  
+  - Auth endpoints: 20 attempts per 15 minutes (failed attempts counted; successful logins are not counted)  
+  - Order placement: 10 requests per minute  
   - General API: 100 requests per 15 minutes
 
 - **Request Validation**: All inputs are validated
@@ -404,16 +489,29 @@ The project now includes enhanced security:
 - Check that `Idempotency-Key` header is being sent (optional feature)
 - Keys are automatically cleaned up after 24 hours
 
+**Issue: `/api/health` returns 503**
+- **MongoDB**: Wait for the database to finish starting, or fix `MONGO_URL` / Compose Mongo credentials.
+- **Redis**: If `REDIS_URL` is set, Redis must be reachable. In Docker, ensure the `redis` service is up: `docker compose ps`.
+
+**Issue: Docker backend fails or old dependencies**
+- Rebuild: `docker compose build --no-cache backend` then `docker compose up -d`.
+- Ensure **root** `.env` exists (copied from `.env.docker`) with real secrets.
+
 ### 📦 Project Structure
 
 ```
 Food-Delivery-main/
-├── backend/          # Node.js/Express API
-│   ├── .env         # Environment variables (create this)
+├── .env.docker      # Template for Docker Compose (copy to .env at root)
+├── .env             # Root env for Compose (create from .env.docker)
+├── docker-compose.yml
+├── Dockerfile.backend / Dockerfile.frontend / Dockerfile.admin
+├── backend/         # Node.js/Express API
+│   ├── .env         # Environment variables for local Node (create this)
 │   ├── server.js    # Main server file
+│   ├── config/      # DB, Redis client
 │   ├── controllers/ # Business logic
 │   ├── models/      # Database models (including idempotency)
-│   ├── routes/      # API routes
+│   ├── routes/      # API routes (includes /api/health)
 │   ├── middleware/  # Auth, validation, rate limiting, idempotency
 │   └── uploads/     # Uploaded images
 ├── frontend/        # React user interface
@@ -451,19 +549,37 @@ cd admin
 npm run dev
 ```
 
+### Docker (from project root)
+
+```bash
+cp .env.docker .env   # then edit .env with real secrets
+docker compose up -d --build
+docker compose exec backend npm run create-admin
+```
+
 ---
 
 ## 🔗 Default URLs
 
+**Local Node + Vite dev servers**
+
 - **Backend API**: http://localhost:4000
 - **Frontend**: http://localhost:5173
 - **Admin Panel**: http://localhost:5174
+
+**Docker Compose**
+
+- **Backend API**: http://localhost:4000
+- **Frontend**: http://localhost:3000
+- **Admin Panel**: http://localhost:3001
 
 ---
 
 ## 📚 Additional Resources
 
 - **MongoDB Atlas Setup**: https://www.mongodb.com/docs/atlas/getting-started/
+- **Docker Docs**: https://docs.docker.com/compose/
+- **Redis**: https://redis.io/docs/
 - **Payment**: Cash on Delivery (COD) - no payment gateway required
 - **Express.js Docs**: https://expressjs.com/
 - **React Docs**: https://react.dev/
@@ -473,16 +589,28 @@ npm run dev
 ## ✅ Checklist
 
 Before running, ensure:
+
+**Local (Node) setup**
+
 - [ ] Node.js installed
 - [ ] MongoDB set up (Atlas or local)
 - [ ] `.env` file created in `backend` folder
 - [ ] All environment variables filled in (especially `ENCRYPTION_KEY`)
+- [ ] (Optional) `REDIS_URL` in `backend/.env` if using local Redis for rate limits
 - [ ] Environment files created for frontend and admin
 - [ ] All dependencies installed (`npm install` in each folder)
 - [ ] MongoDB running/accessible
 - [ ] First admin account created using `npm run create-admin`
 - [ ] `uploads` folder exists in `backend` directory (for file uploads)
 - [ ] ENCRYPTION_KEY is a valid 32-byte hex string (64 characters)
+
+**Docker Compose setup (if used)**
+
+- [ ] Docker installed and running
+- [ ] Root `.env` created from `.env.docker` and secrets updated
+- [ ] `docker compose up -d --build` completed successfully
+- [ ] First admin created with `docker compose exec backend npm run create-admin`
+- [ ] Health check OK at http://localhost:4000/api/health
 
 ---
 

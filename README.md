@@ -14,7 +14,6 @@ This repository hosts the source code for TOMATO, a dynamic food ordering websit
 | [SETUP_AND_RUN_GUIDE.md](SETUP_AND_RUN_GUIDE.md) | Local setup, env vars, Docker |
 | [PROJECT_FEATURES_DOCUMENTATION.md](PROJECT_FEATURES_DOCUMENTATION.md) | Feature reference |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Deploy to cloud/VPS/Docker |
-| [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) | Phased plan for advanced capabilities |
 
 ## Features
 
@@ -265,7 +264,6 @@ Deploy using Docker, cloud platforms (e.g. Render), or the scripts in `DEPLOYMEN
 For detailed setup instructions, see:
 - [Deployment Guide](DEPLOYMENT_GUIDE.md) - Deployment options
 - [Setup and Run Guide](SETUP_AND_RUN_GUIDE.md) - Local development
-- [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md) - Planned advanced features
 - [Project Features](PROJECT_FEATURES_DOCUMENTATION.md) - Feature reference
 
 ## Deployment

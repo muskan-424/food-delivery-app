@@ -2,8 +2,7 @@
 
 Complete step-by-step guide to set up and run the Food Delivery application locally.
 
-> **📚 For feature documentation, see `PROJECT_FEATURES_DOCUMENTATION.md`**  
-> **🗺️ For advanced-features roadmap, see `IMPLEMENTATION_ROADMAP.md`**
+> **📚 For feature documentation, see `PROJECT_FEATURES_DOCUMENTATION.md`**
 
 ## 📋 Prerequisites
 

@@ -463,7 +463,6 @@ VITE_ADMIN_TOKEN_REFRESH_INTERVAL=300000
 
 - [Setup and Run Guide](SETUP_AND_RUN_GUIDE.md)
 - [Project Features Documentation](PROJECT_FEATURES_DOCUMENTATION.md)
-- [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
 
 ---
 

@@ -44,11 +44,14 @@ const FoodReviews = ({ foodId }) => {
       <div className="reviews-list">
         {displayReviews.map((review) => {
           const reviewerName = review.userName || review.userId?.name || "Foodie";
-          const avatarSource = review.userAvatar || review.userId?.profilePicture || "";
+          const avatarSource =
+            review.userAvatarUrl ||
+            review.userId?.profilePictureUrl ||
+            review.userAvatar ||
+            review.userId?.profilePicture ||
+            "";
           const avatarUrl = avatarSource
-            ? (avatarSource.startsWith("http")
-                ? avatarSource
-                : `${url}/images/${avatarSource}`)
+            ? (avatarSource.startsWith("http") ? avatarSource : `${url}/images/${avatarSource}`)
             : null;
 
           return (

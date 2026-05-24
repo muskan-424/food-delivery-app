@@ -1,0 +1,71 @@
+.group-orders-page {
+  max-width: 1100px;
+  margin: 20px auto;
+  padding: 0 12px;
+}
+
+.group-orders-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.group-orders-actions input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.group-orders-actions button {
+  padding: 8px 12px;
+  border: 1px solid #111;
+  border-radius: 6px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+}
+
+.group-orders-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.group-orders-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 12px;
+}
+
+.group-orders-list,
+.group-orders-detail {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.group-session-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fafafa;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.group-split-box {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f7f7ff;
+  border: 1px solid #ececff;
+  border-radius: 6px;
+}
+
+.group-inline-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #b45309;
+}

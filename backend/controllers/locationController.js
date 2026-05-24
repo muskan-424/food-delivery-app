@@ -1,5 +1,7 @@
 // Location services controller
 // Note: For production, integrate with Google Maps API, Mapbox, or similar services
+import { getPaginationParams, buildPaginationMeta } from "../utils/pagination.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Calculate distance between two coordinates (Haversine formula)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -38,13 +40,13 @@ const validateAddress = async (req, res) => {
     const { address } = req.body;
 
     if (!address) {
-      return res.status(400).json({ success: false, message: "Address is required" });
+      return sendError(res, req, 400, "Address is required");
     }
 
     // In production, use address validation service
     const coordinates = await geocodeAddress(address);
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: {
         address,
@@ -54,7 +56,7 @@ const validateAddress = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error validating address" });
+    sendError(res, req, 500, "Error validating address");
   }
 };
 
@@ -64,10 +66,7 @@ const calculateDeliveryFee = async (req, res) => {
     const { restaurantLocation, deliveryLocation } = req.body;
 
     if (!restaurantLocation || !deliveryLocation) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Restaurant and delivery locations are required" 
-      });
+      return sendError(res, req, 400, "Restaurant and delivery locations are required");
     }
 
     const distance = calculateDistance(
@@ -90,7 +89,7 @@ const calculateDeliveryFee = async (req, res) => {
       estimatedMinutes += (distance - 2) * 5;
     }
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: {
         distance: Math.round(distance * 10) / 10, // Round to 1 decimal
@@ -100,7 +99,7 @@ const calculateDeliveryFee = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error calculating delivery fee" });
+    sendError(res, req, 500, "Error calculating delivery fee");
   }
 };
 
@@ -108,18 +107,20 @@ const calculateDeliveryFee = async (req, res) => {
 const getNearbyRestaurants = async (req, res) => {
   try {
     const { lat, lng, radius = 10 } = req.query; // radius in km
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     if (!lat || !lng) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Latitude and longitude are required" 
-      });
+      return sendError(res, req, 400, "Latitude and longitude are required");
     }
 
     // In production, use MongoDB geospatial queries
     // For now, return all restaurants (filtering should be done in production)
     const { default: restaurantModel } = await import('../models/restaurantModel.js');
-    const restaurants = await restaurantModel.find({ isActive: true });
+    const { publicRestaurantMatchForKycGate } = await import('../utils/restaurantKycUtils.js');
+    const restaurants = await restaurantModel.find({
+      isActive: true,
+      ...publicRestaurantMatchForKycGate(),
+    });
 
     // Calculate distance for each restaurant
     const restaurantsWithDistance = restaurants.map(restaurant => {
@@ -139,13 +140,17 @@ const getNearbyRestaurants = async (req, res) => {
     }).filter(r => r.distance <= radius)
       .sort((a, b) => a.distance - b.distance);
 
-    res.status(200).json({
+    const total = restaurantsWithDistance.length;
+    const paged = restaurantsWithDistance.slice(skip, skip + limit);
+
+    sendSuccess(res, req, 200, {
       success: true,
-      data: restaurantsWithDistance
+      data: paged,
+      pagination: buildPaginationMeta(total, page, limit),
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching nearby restaurants" });
+    sendError(res, req, 500, "Error fetching nearby restaurants");
   }
 };
 

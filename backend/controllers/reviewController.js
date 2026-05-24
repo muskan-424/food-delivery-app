@@ -4,6 +4,8 @@ import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import mongoose from "mongoose";
 import { analyzeSentiment, shouldAutoApprove } from "../utils/sentimentAnalysis.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import { getMediaPublicUrl } from "../utils/mediaStorage.js";
 
 const hydrateReviewUserData = async (reviews = []) => {
   if (!Array.isArray(reviews) || reviews.length === 0) return reviews;
@@ -44,6 +46,7 @@ const hydrateReviewUserData = async (reviews = []) => {
       if (!review.userAvatar && user.profilePicture) {
         review.userAvatar = user.profilePicture;
       }
+      review.userAvatarUrl = getMediaPublicUrl(review.userAvatar || user.profilePicture);
     }
   });
 
@@ -57,15 +60,15 @@ const addReview = async (req, res) => {
     const userId = req.body.userId;
 
     if (!userId) {
-      return res.status(401).json({ success: false, message: "User not authenticated" });
+      return sendError(res, req, 401, "User not authenticated");
     }
 
     if (!foodId || !rating) {
-      return res.status(400).json({ success: false, message: "Food ID and rating are required" });
+      return sendError(res, req, 400, "Food ID and rating are required");
     }
 
     if (rating < 1 || rating > 5) {
-      return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
+      return sendError(res, req, 400, "Rating must be between 1 and 5");
     }
 
     // Convert foodId to ObjectId if it's a string (do this early)
@@ -73,7 +76,7 @@ const addReview = async (req, res) => {
     try {
       foodObjectId = mongoose.Types.ObjectId.isValid(foodId) ? new mongoose.Types.ObjectId(foodId) : foodId;
     } catch (idError) {
-      return res.status(400).json({ success: false, message: "Invalid food ID format" });
+      return sendError(res, req, 400, "Invalid food ID format");
     }
 
     // Verify order if orderId provided
@@ -81,7 +84,7 @@ const addReview = async (req, res) => {
       const orderObjectId = mongoose.Types.ObjectId.isValid(orderId) ? new mongoose.Types.ObjectId(orderId) : orderId;
       const order = await orderModel.findOne({ _id: orderObjectId, userId });
       if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found" });
+        return sendError(res, req, 404, "Order not found");
       }
       // Check if order contains this food item
       const hasFood = order.items.some(item => {
@@ -89,7 +92,7 @@ const addReview = async (req, res) => {
         return itemFoodId === foodObjectId.toString();
       });
       if (!hasFood) {
-        return res.status(400).json({ success: false, message: "Food item not in this order" });
+        return sendError(res, req, 400, "Food item not in this order");
       }
     }
 
@@ -98,34 +101,38 @@ const addReview = async (req, res) => {
       const orderObjectId = mongoose.Types.ObjectId.isValid(orderId) ? new mongoose.Types.ObjectId(orderId) : orderId;
       const existingReview = await reviewModel.findOne({ userId, foodId: foodObjectId, orderId: orderObjectId });
       if (existingReview) {
-        return res.status(409).json({ 
-          success: false, 
-          message: "Review already exists for this item in this order. Update existing review instead.",
-          reviewId: existingReview._id
-        });
+        return sendError(
+          res,
+          req,
+          409,
+          "Review already exists for this item in this order. Update existing review instead.",
+          { reviewId: existingReview._id }
+        );
       }
     } else {
       // If no orderId, check for any existing review (backward compatibility)
       const existingReview = await reviewModel.findOne({ userId, foodId: foodObjectId, orderId: null });
       if (existingReview) {
-        return res.status(409).json({ 
-          success: false, 
-          message: "Review already exists. Update existing review instead.",
-          reviewId: existingReview._id
-        });
+        return sendError(
+          res,
+          req,
+          409,
+          "Review already exists. Update existing review instead.",
+          { reviewId: existingReview._id }
+        );
       }
     }
 
     const user = await userModel.findById(userId).select("name email profilePicture");
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
     const userDisplayName = user.name || (user.email ? user.email.split("@")[0] : "Foodie");
     const userAvatar = user.profilePicture || "";
 
     const food = await foodModel.findById(foodObjectId);
     if (!food) {
-      return res.status(404).json({ success: false, message: "Food item not found" });
+      return sendError(res, req, 404, "Food item not found");
     }
 
     // Perform sentiment analysis
@@ -194,17 +201,15 @@ const addReview = async (req, res) => {
     }
     await food.save();
 
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       message: "Review added successfully",
       data: review
     });
   } catch (error) {
     console.error("Error adding review:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error adding review",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    sendError(res, req, 500, "Error adding review", {
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -228,7 +233,7 @@ const getFoodReviews = async (req, res) => {
 
     const total = await reviewModel.countDocuments({ foodId, status: 'approved', isVisible: true });
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: reviews,
       pagination: {
@@ -240,7 +245,7 @@ const getFoodReviews = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching reviews" });
+    sendError(res, req, 500, "Error fetching reviews");
   }
 };
 
@@ -253,7 +258,7 @@ const getOrderReviews = async (req, res) => {
     // Verify order belongs to user
     const order = await orderModel.findOne({ _id: orderId, userId });
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return sendError(res, req, 404, "Order not found");
     }
 
     // Get all reviews for this order
@@ -269,11 +274,12 @@ const getOrderReviews = async (req, res) => {
     const reviewMap = {};
     reviews.forEach(review => {
       if (review.foodId && review.foodId._id) {
+        review.foodId.imageUrl = getMediaPublicUrl(review.foodId.image);
         reviewMap[review.foodId._id.toString()] = review;
       }
     });
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: reviews,
       reviewMap: reviewMap, // Map for easy frontend lookup
@@ -281,7 +287,7 @@ const getOrderReviews = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching order reviews" });
+    sendError(res, req, 500, "Error fetching order reviews");
   }
 };
 
@@ -294,12 +300,12 @@ const updateReview = async (req, res) => {
 
     const review = await reviewModel.findOne({ _id: reviewId, userId });
     if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found" });
+      return sendError(res, req, 404, "Review not found");
     }
 
     if (rating !== undefined) {
       if (rating < 1 || rating > 5) {
-        return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
+        return sendError(res, req, 400, "Rating must be between 1 and 5");
       }
       review.rating = rating;
     }
@@ -345,14 +351,14 @@ const updateReview = async (req, res) => {
       await food.save();
     }
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Review updated successfully",
       data: review
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error updating review" });
+    sendError(res, req, 500, "Error updating review");
   }
 };
 
@@ -364,7 +370,7 @@ const deleteReview = async (req, res) => {
 
     const review = await reviewModel.findOne({ _id: reviewId, userId });
     if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found" });
+      return sendError(res, req, 404, "Review not found");
     }
 
     const foodId = review.foodId;
@@ -390,10 +396,10 @@ const deleteReview = async (req, res) => {
       await food.save();
     }
 
-    res.status(200).json({ success: true, message: "Review deleted successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Review deleted successfully" });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error deleting review" });
+    sendError(res, req, 500, "Error deleting review");
   }
 };
 
@@ -468,7 +474,7 @@ const getAllReviews = async (req, res) => {
       ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(2)
       : 0;
     
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: reviews,
       pagination: {
@@ -489,7 +495,7 @@ const getAllReviews = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching reviews" });
+    sendError(res, req, 500, "Error fetching reviews");
   }
 };
 
@@ -501,12 +507,12 @@ const updateReviewStatus = async (req, res) => {
     
     const review = await reviewModel.findById(reviewId);
     if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found" });
+      return sendError(res, req, 404, "Review not found");
     }
     
     if (status) {
       if (!['pending', 'approved', 'rejected'].includes(status)) {
-        return res.status(400).json({ success: false, message: "Invalid status" });
+        return sendError(res, req, 400, "Invalid status");
       }
       review.status = status;
     }
@@ -537,14 +543,14 @@ const updateReviewStatus = async (req, res) => {
       await food.save();
     }
     
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Review status updated successfully",
       data: review
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error updating review status" });
+    sendError(res, req, 500, "Error updating review status");
   }
 };
 
@@ -555,7 +561,7 @@ const adminDeleteReview = async (req, res) => {
     
     const review = await reviewModel.findById(reviewId);
     if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found" });
+      return sendError(res, req, 404, "Review not found");
     }
     
     const foodId = review.foodId;
@@ -581,10 +587,10 @@ const adminDeleteReview = async (req, res) => {
       await food.save();
     }
     
-    res.status(200).json({ success: true, message: "Review deleted successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Review deleted successfully" });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error deleting review" });
+    sendError(res, req, 500, "Error deleting review");
   }
 };
 

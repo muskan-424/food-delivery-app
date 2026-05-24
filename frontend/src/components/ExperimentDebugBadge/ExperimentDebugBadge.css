@@ -1,0 +1,43 @@
+.exp-debug-badge {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 9999;
+  min-width: 220px;
+  max-width: 360px;
+  background: rgba(23, 23, 23, 0.92);
+  color: #f5f5f5;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+}
+
+.exp-debug-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.exp-debug-badge ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exp-debug-badge li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.exp-key {
+  color: #b3e5fc;
+}
+
+.exp-variant {
+  color: #c8e6c9;
+  font-weight: 600;
+}

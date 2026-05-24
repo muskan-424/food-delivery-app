@@ -155,10 +155,45 @@
     margin: 0;
 }
 
+.order-schedule{
+    font-size: 12px;
+    color: #455a64;
+    margin: 2px 0 0;
+}
+
 .order-status{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.order-status-row {
     display: flex;
     align-items: center;
     gap: 5px;
+}
+
+.order-payment-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffb74d;
+}
+
+.order-payment-badge--muted {
+    background-color: #f5f5f5;
+    color: #616161;
+    border-color: #bdbdbd;
+    text-transform: none;
+    font-weight: 500;
+    font-size: 12px;
 }
 
 .order-status span{
@@ -178,7 +213,9 @@
 }
 
 .track-order-btn,
-.cancel-order-btn {
+.cancel-order-btn,
+.pay-now-btn,
+.dispute-order-btn {
     border: none;
     padding: 10px 16px;
     border-radius: 4px;
@@ -211,6 +248,29 @@
     border-color: #f44336;
 }
 
+.pay-now-btn {
+    background-color: #e8f0ff;
+    color: #0d47a1;
+    border: 1px solid #1976d2;
+}
+
+.pay-now-btn:hover:not(:disabled) {
+    background-color: #1976d2;
+    color: white;
+}
+
+.pay-now-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.payment-retry-meta {
+    margin: -2px 0 0;
+    font-size: 11px;
+    color: #455a64;
+    text-align: center;
+}
+
 .review-order-btn {
     border: none;
     padding: 10px 16px;
@@ -229,6 +289,18 @@
     background-color: #4CAF50;
     color: white;
     border-color: #4CAF50;
+}
+
+.dispute-order-btn {
+    background-color: #fff8e1;
+    color: #f57f17;
+    border: 1px solid #ffb300;
+}
+
+.dispute-order-btn:hover {
+    background-color: #ffb300;
+    color: #fff;
+    border-color: #ffb300;
 }
 
 /* Loading and Error States */
@@ -326,7 +398,10 @@
     }
     
     .track-order-btn,
-    .cancel-order-btn {
+    .cancel-order-btn,
+    .pay-now-btn,
+    .dispute-order-btn,
+    .review-order-btn {
         width: 100%;
         font-size: 14px;
     }

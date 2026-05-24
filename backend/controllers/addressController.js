@@ -1,19 +1,20 @@
 import userModel from "../models/userModel.js";
 import crypto from "crypto";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Get all addresses
 const getAddresses = async (req, res) => {
   try {
     const user = await userModel.findById(req.body.userId).select('addresses');
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
     
     // Addresses are automatically decrypted by model hooks
-    res.status(200).json({ success: true, data: user.addresses || [] });
+    sendSuccess(res, req, 200, { success: true, data: user.addresses || [] });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching addresses" });
+    sendError(res, req, 500, "Error fetching addresses");
   }
 };
 
@@ -38,15 +39,17 @@ const addAddress = async (req, res) => {
 
     // Validation
     if (!name || !phone || !addressLine1 || !city || !state || !pincode) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Name, phone, address line 1, city, state, and pincode are required" 
-      });
+      return sendError(
+        res,
+        req,
+        400,
+        "Name, phone, address line 1, city, state, and pincode are required"
+      );
     }
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const addressId = crypto.randomUUID();
@@ -77,14 +80,14 @@ const addAddress = async (req, res) => {
     user.addresses.push(newAddress);
     await user.save();
 
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       message: "Address added successfully",
       data: newAddress
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error adding address" });
+    sendError(res, req, 500, "Error adding address");
   }
 };
 
@@ -96,12 +99,12 @@ const updateAddress = async (req, res) => {
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const addressIndex = user.addresses.findIndex(addr => addr.addressId === addressId);
     if (addressIndex === -1) {
-      return res.status(404).json({ success: false, message: "Address not found" });
+      return sendError(res, req, 404, "Address not found");
     }
 
     // Update address fields
@@ -131,14 +134,14 @@ const updateAddress = async (req, res) => {
 
     await user.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Address updated successfully",
       data: user.addresses[addressIndex]
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error updating address" });
+    sendError(res, req, 500, "Error updating address");
   }
 };
 
@@ -149,21 +152,21 @@ const deleteAddress = async (req, res) => {
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const addressIndex = user.addresses.findIndex(addr => addr.addressId === addressId);
     if (addressIndex === -1) {
-      return res.status(404).json({ success: false, message: "Address not found" });
+      return sendError(res, req, 404, "Address not found");
     }
 
     user.addresses.splice(addressIndex, 1);
     await user.save();
 
-    res.status(200).json({ success: true, message: "Address deleted successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Address deleted successfully" });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error deleting address" });
+    sendError(res, req, 500, "Error deleting address");
   }
 };
 
@@ -174,12 +177,12 @@ const setDefaultAddress = async (req, res) => {
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const addressIndex = user.addresses.findIndex(addr => addr.addressId === addressId);
     if (addressIndex === -1) {
-      return res.status(404).json({ success: false, message: "Address not found" });
+      return sendError(res, req, 404, "Address not found");
     }
 
     // Unset all defaults
@@ -191,14 +194,14 @@ const setDefaultAddress = async (req, res) => {
     user.addresses[addressIndex].isDefault = true;
     await user.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Default address updated successfully",
       data: user.addresses[addressIndex]
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error setting default address" });
+    sendError(res, req, 500, "Error setting default address");
   }
 };
 

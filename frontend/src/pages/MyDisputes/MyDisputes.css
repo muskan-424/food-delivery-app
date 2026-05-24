@@ -1,0 +1,113 @@
+.my-disputes-page {
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.my-disputes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.my-disputes-head h1 {
+  margin: 0;
+}
+
+.my-disputes-back {
+  font-size: 14px;
+  color: tomato;
+  text-decoration: none;
+}
+
+.my-disputes-intro {
+  color: #555;
+  font-size: 14px;
+  margin: 12px 0 20px;
+}
+
+.my-disputes-intro a {
+  color: tomato;
+}
+
+.my-disputes-empty {
+  color: #666;
+}
+
+.my-disputes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.my-disputes-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #fafafa;
+}
+
+.my-disputes-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.my-disputes-num {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.my-disputes-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eee;
+}
+
+.my-disputes-status--open,
+.my-disputes-status--in_review {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.my-disputes-status--resolved {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.my-disputes-subject {
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.my-disputes-meta {
+  font-size: 13px;
+  color: #555;
+  margin: 0 0 8px;
+}
+
+.my-disputes-desc {
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0 0 8px;
+  color: #333;
+}
+
+.my-disputes-date {
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+}
+
+.my-disputes-resolution {
+  margin-top: 10px;
+  font-size: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+}

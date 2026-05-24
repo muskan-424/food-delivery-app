@@ -23,5 +23,5 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the application
-CMD ["npm", "run", "server"]
+# Start the application (node, not nodemon — suitable for production containers)
+CMD ["npm", "run", "start"]

@@ -1,5 +1,17 @@
 import express from "express";
-import { getProfile, updateProfile, uploadProfilePicture, deleteProfilePicture, changePassword, deleteAccount } from "../controllers/profileController.js";
+import {
+  getProfile,
+  updateProfile,
+  uploadProfilePicture,
+  deleteProfilePicture,
+  changePassword,
+  deleteAccount,
+  listPushDevices,
+  registerPushDevice,
+  unregisterPushDevice,
+  createProfilePictureUploadUrl,
+  finalizeProfilePictureUpload,
+} from "../controllers/profileController.js";
 import authMiddleware from "../middleware/auth.js";
 import { apiLimiter } from "../middleware/rateLimiter.js";
 import idempotencyMiddleware from "../middleware/idempotencyMiddleware.js";
@@ -42,9 +54,14 @@ const upload = multer({
 profileRouter.get("/", apiLimiter, authMiddleware, getProfile);
 profileRouter.put("/", apiLimiter, authMiddleware, updateProfile);
 profileRouter.post("/picture", apiLimiter, authMiddleware, upload.single("profilePicture"), profilePictureIdempotency, uploadProfilePicture);
+profileRouter.post("/picture/upload-url", apiLimiter, authMiddleware, createProfilePictureUploadUrl);
+profileRouter.post("/picture/finalize", apiLimiter, authMiddleware, finalizeProfilePictureUpload);
 profileRouter.delete("/picture", apiLimiter, authMiddleware, deleteProfilePicture);
 profileRouter.put("/password", apiLimiter, authMiddleware, changePassword);
 profileRouter.delete("/account", apiLimiter, authMiddleware, deleteAccount);
+profileRouter.get("/push-devices", apiLimiter, authMiddleware, listPushDevices);
+profileRouter.post("/push-devices", apiLimiter, authMiddleware, registerPushDevice);
+profileRouter.delete("/push-devices", apiLimiter, authMiddleware, unregisterPushDevice);
 
 export default profileRouter;
 

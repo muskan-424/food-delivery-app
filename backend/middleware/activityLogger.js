@@ -1,5 +1,85 @@
 import UserActivity from "../models/userActivityModel.js";
 import userModel from "../models/userModel.js";
+import { appConfig } from "../config/appConfig.js";
+import { recordHttpAnalyticsEvent } from "../services/analyticsEventService.js";
+
+const METRIC_ROUTE_CAP = 300;
+const requestMetricsState = {
+  startedAt: new Date().toISOString(),
+  totals: {
+    requests: 0,
+    errors5xx: 0,
+    errors4xx: 0,
+    slow: 0,
+  },
+  byRoute: {},
+};
+
+function normalizeMetricPath(path) {
+  return String(path || "")
+    .replace(/[0-9a-f]{24}/gi, ":id")
+    .replace(/\b\d+\b/g, ":n")
+    .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ":uuid");
+}
+
+function updateRequestMetrics({ method, path, statusCode, durationMs }) {
+  const key = `${String(method || "GET").toUpperCase()} ${normalizeMetricPath(path)}`;
+  if (!requestMetricsState.byRoute[key] && Object.keys(requestMetricsState.byRoute).length >= METRIC_ROUTE_CAP) {
+    return;
+  }
+  requestMetricsState.totals.requests += 1;
+  if (statusCode >= 500) requestMetricsState.totals.errors5xx += 1;
+  else if (statusCode >= 400) requestMetricsState.totals.errors4xx += 1;
+  if (durationMs >= appConfig.requestLogSlowMs) requestMetricsState.totals.slow += 1;
+
+  const row = requestMetricsState.byRoute[key] || {
+    method: String(method || "GET").toUpperCase(),
+    path: normalizeMetricPath(path),
+    count: 0,
+    errors4xx: 0,
+    errors5xx: 0,
+    slow: 0,
+    avgMs: 0,
+    maxMs: 0,
+    lastStatusCode: 0,
+    lastAt: null,
+  };
+  row.count += 1;
+  if (statusCode >= 500) row.errors5xx += 1;
+  else if (statusCode >= 400) row.errors4xx += 1;
+  if (durationMs >= appConfig.requestLogSlowMs) row.slow += 1;
+  row.avgMs = Math.round((((row.avgMs * (row.count - 1)) + durationMs) / row.count) * 100) / 100;
+  row.maxMs = Math.max(row.maxMs || 0, Math.round(durationMs * 100) / 100);
+  row.lastStatusCode = statusCode;
+  row.lastAt = new Date().toISOString();
+  requestMetricsState.byRoute[key] = row;
+}
+
+export function getRequestMetricsSnapshot() {
+  const routes = Object.values(requestMetricsState.byRoute)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, METRIC_ROUTE_CAP);
+  return {
+    startedAt: requestMetricsState.startedAt,
+    routeCap: METRIC_ROUTE_CAP,
+    totals: { ...requestMetricsState.totals },
+    routeCount: routes.length,
+    routes,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function shouldEmitStructuredRequestLog({
+  statusCode,
+  durationMs,
+  path,
+}) {
+  if (!appConfig.enableStructuredRequestLogs) return false;
+  if (statusCode >= 500) return true;
+  if (durationMs >= appConfig.requestLogSlowMs) return true;
+  if (path.startsWith("/api/health")) return false;
+  return Math.random() < appConfig.requestLogSampleRate;
+}
 
 // Activity logger middleware
 const activityLogger = async (req, res, next) => {
@@ -14,6 +94,7 @@ const activityLogger = async (req, res, next) => {
   const userAgent = req.headers['user-agent'];
   const requestMethod = req.method;
   const requestUrl = req.originalUrl || req.url;
+  const reqStart = process.hrtime.bigint();
 
   // Determine activity type from route
   const activityType = determineActivityType(req.path, requestMethod);
@@ -74,6 +155,49 @@ const activityLogger = async (req, res, next) => {
       await activity.save();
     } catch (error) {
       console.error('Error logging activity:', error);
+    }
+  });
+
+  // Structured request log on response completion (stdout)
+  res.on("finish", () => {
+    try {
+      const durationMs = Number(process.hrtime.bigint() - reqStart) / 1_000_000;
+      const statusCode = Number(res.statusCode || 0);
+      updateRequestMetrics({
+        method: requestMethod,
+        path: req.path || "",
+        statusCode,
+        durationMs,
+      });
+      if (
+        !shouldEmitStructuredRequestLog({
+          statusCode,
+          durationMs,
+          path: req.path || "",
+        })
+      ) {
+        return;
+      }
+      const payload = {
+        ts: new Date().toISOString(),
+        kind: "http_request",
+        requestId: req.requestId || "",
+        method: requestMethod,
+        path: req.path || "",
+        url: requestUrl,
+        statusCode,
+        durationMs: Math.round(durationMs * 100) / 100,
+        sampled: !(statusCode >= 500 || durationMs >= appConfig.requestLogSlowMs),
+        userId: String(req.body?.userId || ""),
+        role: String(req.body?.role || ""),
+        ipAddress: ipAddress || "",
+      };
+      console.log(JSON.stringify(payload));
+      setImmediate(() => {
+        recordHttpAnalyticsEvent(payload).catch(() => null);
+      });
+    } catch (error) {
+      console.error("structured_request_log_error:", error?.message || error);
     }
   });
 

@@ -91,8 +91,20 @@ FRONTEND_URL=http://localhost:5173
 # Enable scheduled jobs for data retention
 ENABLE_SCHEDULED_JOBS=true
 
-# Payment Methods: UPI, Net Banking, Cards, Wallets, Cash on Delivery
-# No external payment gateway required - all handled internally
+# Payment Methods: UPI, Net Banking, Cards, Wallets, Cash on Delivery, Razorpay Checkout
+
+# Razorpay Checkout (create order + verify callback) — different from webhook secret below
+# RAZORPAY_KEY_ID=rzp_test_...
+# RAZORPAY_KEY_SECRET=...
+# Optional anti-spam cooldown between create-order retries per payment (default 15000)
+# RAZORPAY_CREATE_ORDER_COOLDOWN_MS=15000
+
+# Payment webhooks (optional — Phase 3)
+# Generic: POST /api/payment/webhook/generic — header X-Payment-Webhook-Signature: sha256=<hmac>
+# PAYMENT_WEBHOOK_SECRET=your_shared_secret
+# Razorpay: POST /api/payment/webhook/razorpay — header X-Razorpay-Signature
+# RAZORPAY_WEBHOOK_SECRET=...
+# Phase 3 strategy in this project: single online gateway (Razorpay) + COD fallback.
 
 # Server Port (optional, defaults to 4000)
 PORT=4000
@@ -101,7 +113,36 @@ PORT=4000
 # Local Redis:
 # REDIS_URL=redis://localhost:6379
 # Docker Compose sets this in the project root .env (see Docker section)
+
+# Phase 0 — optional (requires REDIS_URL for the job queue)
+# ENABLE_JOB_QUEUE=true
+# ENABLE_MARKETPLACE=false
+# API_VERSION=v1
+
+# Phase 9 — observability logging (optional)
+# Enable/disable structured request logs (default: true)
+# ENABLE_STRUCTURED_REQUEST_LOGS=true
+# Sampling rate for normal requests (0.0 to 1.0, default: 0.15)
+# REQUEST_LOG_SAMPLE_RATE=0.15
+# Always log requests slower than this many ms (default: 1200)
+# REQUEST_LOG_SLOW_MS=1200
 ```
+
+**Recommended production starting values (adjust after traffic review):**
+
+```env
+ENABLE_STRUCTURED_REQUEST_LOGS=true
+REQUEST_LOG_SAMPLE_RATE=0.10
+REQUEST_LOG_SLOW_MS=1000
+```
+
+### Phase 1 — catalog & restaurant (optional fields)
+
+- **Food list:** `GET /api/food/list?restaurantId=<id>&availableOnly=true`
+- **Food (admin):** multipart `restaurantId`, `stockCount`, `modifierGroups` as JSON string, e.g. `[{"key":"size","name":"Size","required":true,"minSelect":1,"maxSelect":1,"options":[{"key":"reg","name":"Regular","priceDelta":0},{"key":"lg","name":"Large","priceDelta":40}]}]`
+- **Restaurant (admin):** `weeklyHours` (array of `{ dayOfWeek: 0–6, open, close, closed }`, times `HH:mm`), `hourExceptions`, `deliveryRadiusKm` (requires customer `address.coordinates` on checkout to enforce)
+- **Place order:** Server recalculates item prices from menu data. Optional per line: `modifiers: [{ "groupKey": "size", "optionKeys": ["lg"] }]`. With `restaurantId`, validates open hours, delivery radius, minimum order, and that all items belong to that restaurant.
+
 
 ### 🔑 Getting Your Keys:
 
@@ -129,8 +170,17 @@ PORT=4000
 
 4. **Payment System**:
    - Multiple payment methods supported (UPI, Cards, Wallets, Net Banking, COD)
-   - No external payment gateway required
-   - All payments tracked internally
+   - Razorpay Checkout is used for online payment verification
+   - COD remains available as fallback if online payment is incomplete
+
+### Phase 4 — payouts API (admin)
+
+- **Preview payout:** `POST /api/restaurant/payouts/preview` body: `periodStart`, `periodEnd`, optional `restaurantId`, optional `statuses` (array or comma-separated)
+- **Create payout batch:** `POST /api/restaurant/payouts/batch`
+- **List payout batches:** `GET /api/restaurant/payouts/batch?status=draft&page=1&limit=20`
+- **Get payout batch:** `GET /api/restaurant/payouts/batch/:batchId`
+- **Update lifecycle:** `PATCH /api/restaurant/payouts/batch/:batchId/status` body: `status` (`finalized|paid|reconciled`), optional `notes`, `paidReference`
+- **CSV export:** `GET /api/restaurant/payouts/batch/:batchId/export.csv`
 
 5. **Redis (`REDIS_URL`)**:
    - **Not required** for local development: if you leave `REDIS_URL` unset, API rate limits use in-memory storage (fine for a single server process).
@@ -317,6 +367,240 @@ After pulling changes that add npm packages, rebuild the backend image:
 2. You should see JSON with `"mongo": "connected"` and `"redis": "ok"` (Docker) or `"redis": "disabled"` (local Node without `REDIS_URL`).  
 3. HTTP **503** means MongoDB or required Redis is not ready; wait a few seconds after `docker compose up` and retry.
 
+### Scheduling runtime config check (Phase 2):
+
+Use this when validating scheduled-order advancement tuning values at runtime.
+
+```bash
+curl http://localhost:4000/api/health/scheduling-config
+```
+
+Expected response shape:
+
+```json
+{
+  "success": true,
+  "scheduling": {
+    "enableScheduledJobs": true,
+    "enableJobQueue": true,
+    "queueActive": true,
+    "orderAdvancement": {
+      "everyMs": 60000,
+      "limit": 100,
+      "overdueGraceMinutes": 15,
+      "dryRunIdListCap": 100
+    }
+  }
+}
+```
+
+Manual advancement trigger (admin-only, for testing):
+
+```bash
+curl -X POST http://localhost:4000/api/order/scheduled/advance \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"limit":50}'
+```
+
+Dry-run (no status changes):
+
+```bash
+curl -X POST http://localhost:4000/api/order/scheduled/advance \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"limit":50,"dryRun":true}'
+```
+
+Response includes: `scanned`, `dueOrderCount`, `advanced`, `failed`, `dueOrderIds` (capped in dry-run; see `dueOrderIdsTruncated`), `usedLimit`, `dryRun`, `triggeredAt`. Configure cap with `SCHEDULED_ORDER_DRY_RUN_ID_CAP` (default 100, max 500).
+
+### Observability and metrics checks (Phase 9):
+
+Use these endpoints to verify runtime observability wiring in local/dev/prod.
+
+```bash
+# Deep operational snapshot (JSON)
+curl http://localhost:4000/api/health/ops
+
+# Lightweight in-memory route metrics (JSON)
+curl http://localhost:4000/api/health/metrics-lite
+
+# Prometheus scrape output (text format)
+curl http://localhost:4000/api/health/metrics
+```
+
+What to look for:
+- `/api/health/ops`: `runtime`, `queue`, `realtime`, `retention` blocks present
+- `/api/health/metrics-lite`: `totals.requests` increasing after API calls
+- `/api/health/metrics`: lines like `http_requests_total` and `http_route_requests_total{...}`
+
+### Object storage direct-upload finalize flow (Phase 9):
+
+Use this 3-step flow when `OBJECT_STORAGE_PROVIDER=s3` and frontend uploads directly to object storage.
+
+```bash
+# 1) Request profile picture upload URL
+curl -X POST http://localhost:4000/api/profile/picture/upload-url \
+  -H "Content-Type: application/json" \
+  -H "token: <USER_JWT>" \
+  -d '{"ext":"jpg","contentType":"image/jpeg"}'
+
+# 2) Upload bytes directly to returned uploadUrl (PUT)
+# (Use your HTTP client / frontend code; URL is pre-signed)
+
+# 3) Finalize key attach in backend
+curl -X POST http://localhost:4000/api/profile/picture/finalize \
+  -H "Content-Type: application/json" \
+  -H "token: <USER_JWT>" \
+  -d '{"key":"profile_<userId>_<timestamp>.jpg"}'
+```
+
+Food image finalize flow:
+
+```bash
+# 1) Request food image upload URL (menu.manage permission required)
+curl -X POST http://localhost:4000/api/food/image/upload-url \
+  -H "Content-Type: application/json" \
+  -H "token: <STAFF_OR_ADMIN_JWT>" \
+  -d '{"ext":"png","contentType":"image/png"}'
+
+# 2) Upload bytes directly to returned uploadUrl (PUT)
+
+# 3) Attach uploaded key to a food item
+curl -X POST http://localhost:4000/api/food/<foodId>/image/finalize \
+  -H "Content-Type: application/json" \
+  -H "token: <STAFF_OR_ADMIN_JWT>" \
+  -d '{"key":"food_<timestamp>_<rand>.png"}'
+```
+
+KYC document finalize flow:
+
+```bash
+# 1) Request KYC document upload URL (restaurant.manage permission required)
+curl -X POST http://localhost:4000/api/restaurant/<restaurantId>/kyc/upload-url \
+  -H "Content-Type: application/json" \
+  -H "token: <STAFF_OR_ADMIN_JWT>" \
+  -d '{"ext":"pdf","contentType":"application/pdf"}'
+
+# 2) Upload bytes directly to returned uploadUrl (PUT)
+
+# 3) Finalize KYC key attach
+curl -X POST http://localhost:4000/api/restaurant/<restaurantId>/kyc/finalize \
+  -H "Content-Type: application/json" \
+  -H "token: <STAFF_OR_ADMIN_JWT>" \
+  -d '{"key":"kyc_<restaurantId>_<timestamp>.pdf"}'
+```
+
+POD evidence finalize flow:
+
+```bash
+# 1) Driver requests POD evidence upload URL for their assignment
+curl -X POST http://localhost:4000/api/delivery/assignment/<assignmentId>/pod/upload-url \
+  -H "Content-Type: application/json" \
+  -H "token: <DRIVER_JWT>" \
+  -d '{"ext":"jpg","contentType":"image/jpeg"}'
+
+# 2) Upload bytes directly to returned uploadUrl (PUT)
+
+# 3) Driver finalizes POD evidence key
+curl -X POST http://localhost:4000/api/delivery/assignment/<assignmentId>/pod/finalize \
+  -H "Content-Type: application/json" \
+  -H "token: <DRIVER_JWT>" \
+  -d '{"key":"pod_<assignmentId>_<timestamp>.jpg"}'
+```
+
+### Analytics export pipeline (Phase 9):
+
+Admin can export filtered analytics events to local artifacts (`jsonl` or `csv`).
+
+```bash
+# 1) Create export (returns exportId)
+curl -X POST http://localhost:4000/api/admin/users/analytics/events/export \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"format":"jsonl","from":"2026-01-01T00:00:00Z","to":"2026-12-31T23:59:59Z","statusClass":"5xx"}'
+
+# 2) List recent exports
+curl -H "token: <ADMIN_JWT>" \
+  http://localhost:4000/api/admin/users/analytics/events/exports
+
+# 3) Download export artifact by id
+curl -L -H "token: <ADMIN_JWT>" \
+  http://localhost:4000/api/admin/users/analytics/events/exports/<exportId>/download \
+  -o analytics-export.jsonl
+```
+
+Retention for export artifacts:
+
+```env
+# Optional: days to keep analytics export files/metadata (default: 30)
+# ANALYTICS_EXPORT_RETENTION_DAYS=30
+```
+
+### Retention cleanup on-demand (admin):
+
+Use this to preview or trigger retention cleanup immediately.
+
+```bash
+# Dry-run preview (no deletes)
+curl -X POST http://localhost:4000/api/gdpr/admin/retention/run \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"dryRun":true}'
+
+# Execute cleanup now
+curl -X POST http://localhost:4000/api/gdpr/admin/retention/run \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"dryRun":false}'
+```
+
+### Partner API client credentials flow (Phase 10):
+
+Use this to test external partner integrations with OAuth2-style client credentials.
+
+```bash
+# 1) Create a partner API client (admin)
+curl -X POST http://localhost:4000/api/admin/users/partner-clients \
+  -H "Content-Type: application/json" \
+  -H "token: <ADMIN_JWT>" \
+  -d '{"name":"POS Integration","scopes":["orders.read"]}'
+
+# Response includes one-time clientSecret — copy and store securely.
+
+# Optional: rotate secret for an existing clientId
+curl -X POST http://localhost:4000/api/admin/users/partner-clients/<CLIENT_ID>/rotate-secret \
+  -H "token: <ADMIN_JWT>"
+
+# 2) Exchange client credentials for access token
+curl -X POST http://localhost:4000/api/partner/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{"grant_type":"client_credentials","client_id":"<CLIENT_ID>","client_secret":"<CLIENT_SECRET>","scope":"orders.read"}'
+
+# Note: requested `scope` values must exist in the catalog and be authorized
+# for the client. Unknown or unauthorized values return `400 invalid_scope`.
+
+# 3) Call a scope-protected partner endpoint
+curl -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  http://localhost:4000/api/partner/orders/ping
+
+# 4) (Admin) inspect recent partner API audit logs
+curl -H "token: <ADMIN_JWT>" \
+  "http://localhost:4000/api/admin/users/partner-api/audit?limit=20"
+
+# 5) (Admin) export partner API audit logs as CSV (supports clientId/from/to filters)
+curl -H "token: <ADMIN_JWT>" \
+  "http://localhost:4000/api/admin/users/partner-api/audit.csv?limit=1000&clientId=<CLIENT_ID>&from=<ISO>&to=<ISO>" \
+  -o partner_api_audit.csv
+```
+
+PowerShell quick test:
+
+```powershell
+$token = Invoke-RestMethod -Method POST -Uri "http://localhost:4000/api/partner/oauth/token" -ContentType "application/json" -Body '{"grant_type":"client_credentials","client_id":"<CLIENT_ID>","client_secret":"<CLIENT_SECRET>","scope":"orders.read"}'
+Invoke-RestMethod -Method GET -Uri "http://localhost:4000/api/partner/orders/ping" -Headers @{ Authorization = "Bearer $($token.access_token)" }
+```
+
 ### Test Frontend:
 
 1. **Local dev:** Open `http://localhost:5173` (or the port shown in terminal).  
@@ -393,6 +677,76 @@ Create admin account for "admin@example.com"? (y/N): y
 - **Password Validation**: Strong password requirements enforced
 - **Audit Trail**: Tracks who created admin accounts
 - **Statistics Dashboard**: Shows current admin count and available slots
+
+---
+
+## 🧪 Testing & health checks
+
+### Backend configuration check
+
+```bash
+cd backend
+npm run test:setup
+```
+
+Verifies required env vars, MongoDB connectivity, encryption key, and JWT secrets.
+
+### Smoke tests (API regression)
+
+**Terminal 1** — start backend:
+
+```bash
+cd backend
+npm run server
+```
+
+**Terminal 2** — run smoke suite:
+
+```bash
+cd backend
+npm run test:smoke
+```
+
+Covers 21 checks: order status machine, health/ops endpoints, food list, search, user register/login, profile, growth API, notifications inbox, admin dashboard stats, and disputes summary. Exit code `0` = all passed.
+
+Optional: `BASE_URL=http://localhost:4000 node smoke-test.js` if the API runs on a non-default host/port.
+
+---
+
+## 🔑 Password reset (local dev / recovery)
+
+Passwords are stored as **bcrypt hashes** and cannot be read back from MongoDB. Use the reset CLI when you forget a login.
+
+### List registered emails
+
+```bash
+cd backend
+npm run reset-password -- --list
+```
+
+### Set a new password
+
+```bash
+cd backend
+npm run reset-password -- --email "admin@example.com" --password "Admin123!"
+npm run reset-password -- --email "muskanmittal151@gmail.com" --password "YourNewPass1!"
+```
+
+Password must meet app rules: 8+ chars, upper, lower, number, special character.
+
+The script also clears account lockouts and revokes active refresh tokens (user must log in again).
+
+**Legacy admin-only script:** `node reset-admin.js` resets `admin@example.com` to `Admin123!`.
+
+### Remove test accounts from database
+
+```bash
+cd backend
+npm run purge-test-users              # dry-run — lists targets
+npm run purge-test-users -- --execute # delete test users + related tokens
+```
+
+Removes `@test.local`, `testuser@example.com`, and `john.doe.tester@example.com` accounts. Smoke tests also delete their temporary user automatically after each run.
 
 ---
 
@@ -492,6 +846,18 @@ The project now includes enhanced security:
 - **MongoDB**: Wait for the database to finish starting, or fix `MONGO_URL` / Compose Mongo credentials.
 - **Redis**: If `REDIS_URL` is set, Redis must be reachable. In Docker, ensure the `redis` service is up: `docker compose ps`.
 
+**Issue: Forgot login password (local dev)**
+
+- Passwords are hashed and cannot be retrieved from the database.
+- List accounts: `npm run reset-password -- --list`
+- Reset: `npm run reset-password -- --email user@example.com --password "NewPass1!"`
+- Main admin shortcut: `node reset-admin.js` → sets `admin@example.com` to `Admin123!`
+
+**Issue: Smoke tests fail with connection error**
+- Hit a few API routes first (for example `/api/food/list`, `/api/health`), then re-check `/api/health/metrics-lite`.
+- Confirm backend process was restarted after recent code changes.
+- If you only call static/assets paths, request counters may not move meaningfully.
+
 **Issue: Docker backend fails or old dependencies**
 - Rebuild: `docker compose build --no-cache backend` then `docker compose up -d`.
 - Ensure **root** `.env` exists (copied from `.env.docker`) with real secrets.
@@ -512,6 +878,9 @@ Food-Delivery-main/
 │   ├── models/      # Database models (including idempotency)
 │   ├── routes/      # API routes (includes /api/health)
 │   ├── middleware/  # Auth, validation, rate limiting, idempotency
+│   ├── scripts/     # createFirstAdmin, resetUserPassword, etc.
+│   ├── smoke-test.js    # API smoke test suite (npm run test:smoke)
+│   ├── test-setup.js    # Env/DB config check (npm run test:setup)
 │   └── uploads/     # Uploaded images
 ├── frontend/        # React user interface
 └── admin/           # React admin panel
@@ -546,6 +915,11 @@ npm run dev
 # 7. Run admin (Terminal 3)
 cd admin
 npm run dev
+
+# 8. (Optional) Verify backend health
+cd backend
+npm run test:setup
+npm run test:smoke   # backend must be running
 ```
 
 ### Docker (from project root)
@@ -600,6 +974,7 @@ Before running, ensure:
 - [ ] All dependencies installed (`npm install` in each folder)
 - [ ] MongoDB running/accessible
 - [ ] First admin account created using `npm run create-admin`
+- [ ] (Optional) Smoke tests pass: `npm run test:smoke` with backend running
 - [ ] `uploads` folder exists in `backend` directory (for file uploads)
 - [ ] ENCRYPTION_KEY is a valid 32-byte hex string (64 characters)
 

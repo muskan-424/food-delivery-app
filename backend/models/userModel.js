@@ -21,6 +21,16 @@ const addressSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const pushDeviceSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true },
+    platform: { type: String, enum: ["android", "ios", "web", "unknown"], default: "unknown" },
+    active: { type: Boolean, default: true },
+    lastSeenAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -29,7 +39,23 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, default: '' },
     profilePicture: { type: String, default: '' },
     role: { type: String, default: "user" },
+    /** Phase 1 scaffold: restaurant-scoped staff access */
+    restaurantStaff: {
+      restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "restaurant", default: null },
+      permissions: { type: [String], default: [] }, // e.g. ["menu.manage", "inventory.manage"]
+      active: { type: Boolean, default: true },
+    },
+    /** Unique share code; assigned after registration (Phase 7) */
+    referralCode: { type: String, unique: true, sparse: true },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
+    loyaltyPoints: { type: Number, default: 0, min: 0 },
+    /** Whole balance expires at this instant (rolling window from last earn); null if no expiry set */
+    loyaltyBalanceExpiresAt: { type: Date, default: null, index: true },
+    /** Lowercase tags for campaign / coupon targeting (admin-managed) */
+    segmentTags: { type: [String], default: [] },
     cartData: { type: Object, default: {} },
+    /** Phase 6 push notifications: per-device tokens */
+    pushDevices: { type: [pushDeviceSchema], default: [] },
     addresses: [addressSchema],
     wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'food' }],
     // User management fields

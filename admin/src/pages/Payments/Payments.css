@@ -117,6 +117,156 @@
   background: #c82333;
 }
 
+.reconciliation-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.reconciliation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.reconciliation-header h3 {
+  margin: 0;
+  color: #454545;
+}
+
+.reconciliation-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reconciliation-load-btn {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #1976d2;
+  color: white;
+  cursor: pointer;
+}
+
+.reconciliation-load-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.reconciliation-export-btn {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #2e7d32;
+  color: white;
+  cursor: pointer;
+}
+
+.reconciliation-export-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.reconciliation-link-btn {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #455a64;
+  color: white;
+  cursor: pointer;
+}
+
+.reconciliation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.reconciliation-table-wrap {
+  overflow-x: auto;
+}
+
+.reconciliation-table th,
+.reconciliation-table td {
+  white-space: nowrap;
+}
+
+.recon-extended-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #454545;
+  cursor: pointer;
+  user-select: none;
+}
+
+.recon-extended-toggle input {
+  cursor: pointer;
+}
+
+.recon-issues-btn {
+  background: #6a1b9a;
+}
+
+.recon-depth {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.recon-depth-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #333;
+}
+
+.recon-depth-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #616161;
+  line-height: 1.45;
+  max-width: 900px;
+}
+
+.recon-depth-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.recon-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #757575;
+}
+
+.recon-sample-block h5 {
+  margin: 16px 0 8px;
+  font-size: 14px;
+  color: #424242;
+}
+
+.recon-sample-meta {
+  font-weight: 400;
+  font-size: 12px;
+  color: #757575;
+}
+
+.recon-no-rows {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #757575;
+}
+
 /* Payments List */
 .payments-list {
   background: white;
@@ -263,6 +413,11 @@
 
   .payments-statistics {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .reconciliation-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

@@ -4,7 +4,10 @@ import {
   downloadExport,
   requestDataDeletion,
   anonymizeUserData,
-  deleteUserDataCompletely
+  deleteUserDataCompletely,
+  getRetentionPolicyInfo,
+  getRetentionLastRunInfo,
+  runRetentionNow,
 } from "../controllers/gdprController.js";
 import authMiddleware from "../middleware/auth.js";
 import adminMiddleware from "../middleware/adminMiddleware.js";
@@ -22,6 +25,9 @@ gdprRouter.post("/anonymize", apiLimiter, authMiddleware, anonymizeUserData); //
 // Admin routes
 gdprRouter.post("/anonymize/:userId", apiLimiter, authMiddleware, adminMiddleware, anonymizeUserData);
 gdprRouter.delete("/delete/:userId", apiLimiter, authMiddleware, adminMiddleware, deleteUserDataCompletely);
+gdprRouter.get("/admin/retention/policies", apiLimiter, authMiddleware, adminMiddleware, getRetentionPolicyInfo);
+gdprRouter.get("/admin/retention/last-run", apiLimiter, authMiddleware, adminMiddleware, getRetentionLastRunInfo);
+gdprRouter.post("/admin/retention/run", apiLimiter, authMiddleware, adminMiddleware, runRetentionNow);
 
 export default gdprRouter;
 

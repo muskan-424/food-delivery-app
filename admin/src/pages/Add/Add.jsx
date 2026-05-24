@@ -50,16 +50,33 @@ const Add = ({url}) => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append("name", data.name.trim());
-      formData.append("description", data.description.trim());
-      formData.append("price", Number(data.price));
-      formData.append("category", data.category);
-      formData.append("image", image);
-
-      const response = await axios.post(`${url}/api/food/add`, formData, {
-        headers: { token }
+      const ext = (image.name?.split(".").pop() || "jpg").toLowerCase();
+      const contentType = image.type || "image/jpeg";
+      const uploadMeta = await axios.post(
+        `${url}/api/food/image/upload-url`,
+        { ext, contentType },
+        { headers: { token } }
+      );
+      if (!uploadMeta.data?.success) {
+        toast.error(uploadMeta.data?.message || "Failed to prepare image upload");
+        return;
+      }
+      const { uploadUrl, key } = uploadMeta.data.data || {};
+      await axios.put(uploadUrl, image, {
+        headers: { "Content-Type": contentType },
       });
+
+      const response = await axios.post(
+        `${url}/api/food/add`,
+        {
+          name: data.name.trim(),
+          description: data.description.trim(),
+          price: Number(data.price),
+          category: data.category,
+          imageKey: key,
+        },
+        { headers: { token } }
+      );
       
       if (response.data.success) {
         setData({

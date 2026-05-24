@@ -3,14 +3,14 @@ import "./Cart.css";
 import { StoreContext } from "../../context/StoreContext";
 import { useNavigate } from "react-router-dom";
 import { formatCurrency } from "../../utils/currency";
+import { grossFromExclusive } from "../../utils/menuTaxDisplay";
 import axios from "axios";
+import useExperiment from "../../hooks/useExperiment";
 
 const Cart = () => {
   const {
     food_list,
-    cartItems,
-    setCartItems,
-    addToCart,
+    cartLines,
     removeFromCart,
     getTotalCartAmount,
     url,
@@ -24,6 +24,7 @@ const Cart = () => {
   const [freeDelivery, setFreeDelivery] = useState(false);
   const [availableOffers, setAvailableOffers] = useState([]);
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  const { variant: cartCheckoutCtaVariant } = useExperiment("cart_checkout_cta_v1");
   const FREE_DELIVERY_THRESHOLD = 150;
 
   // Calculate offers and discounts automatically
@@ -121,8 +122,7 @@ const Cart = () => {
     calculateOffers();
     fetchActiveOffers();
     fetchAvailableCoupons();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartItems, token, getTotalCartAmount()]);
+  }, [cartLines, token]);
 
   // Calculate total with offers
   const calculateTotal = () => {
@@ -138,6 +138,14 @@ const Cart = () => {
   };
 
   const totals = calculateTotal();
+  const checkoutButtonLabel =
+    cartCheckoutCtaVariant === "treatment" ? "CONTINUE TO SECURE CHECKOUT" : "PROCEED TO CHECKOUT";
+  const resolveItemImage = (item) => {
+    if (item?.imageUrl) return item.imageUrl;
+    if (!item?.image) return "https://via.placeholder.com/100x100?text=No+Image";
+    if (String(item.image).startsWith("http")) return item.image;
+    return `${url}/images/${item.image}`;
+  };
 
   return (
     <div className="cart">
@@ -152,23 +160,47 @@ const Cart = () => {
         </div>
         <br />
         <hr />
-        {food_list.map((item, index) => {
-          if (cartItems[item._id] > 0) {
+        {Object.entries(cartLines).map(([lineKey, qty]) => {
+          const [itemId, encodedModifiers] = lineKey.split("::");
+          const item = food_list.find((x) => x._id === itemId);
+          if (item && qty > 0) {
+            let extra = 0;
+            let modifierLabels = [];
+            let parsedModifiers = [];
+            try {
+              parsedModifiers = encodedModifiers ? JSON.parse(encodedModifiers) : [];
+              for (const m of parsedModifiers) {
+                const group = (item.modifierGroups || []).find((g) => g.key === m.groupKey);
+                for (const k of m.optionKeys || []) {
+                  const opt = (group?.options || []).find((o) => o.key === k);
+                  if (opt) {
+                    extra += Number(opt.priceDelta) || 0;
+                    modifierLabels.push(`${group?.name || m.groupKey}: ${opt.name}`);
+                  }
+                }
+              }
+            } catch {
+              modifierLabels = [];
+            }
+            const unit = grossFromExclusive((Number(item.price) || 0) + extra, item.restaurantMenuTax);
             return (
-              <div>
+              <div key={lineKey}>
                 <div className="cart-items-title cart-items-item">
                   <img 
-                    src={item.image ? `${url}/images/${item.image}` : "https://via.placeholder.com/100x100?text=No+Image"} 
+                    src={resolveItemImage(item)} 
                     alt={item.name || "Food item"}
                     onError={(e) => {
                       e.target.src = "https://via.placeholder.com/100x100?text=Image+Not+Found";
                     }}
                   />
-                  <p>{item.name}</p>
-                  <p>{formatCurrency(item.price)}</p>
-                  <p>{cartItems[item._id]}</p>
-                  <p>{formatCurrency(item.price * cartItems[item._id])}</p>
-                  <p onClick={() => removeFromCart(item._id)} className="cross">
+                  <p>
+                    {item.name}
+                    {modifierLabels.length > 0 ? ` (${modifierLabels.join(", ")})` : ""}
+                  </p>
+                  <p>{formatCurrency(unit)}</p>
+                  <p>{qty}</p>
+                  <p>{formatCurrency(unit * qty)}</p>
+                  <p onClick={() => removeFromCart(item._id, parsedModifiers)} className="cross">
                     x
                   </p>
                 </div>
@@ -176,6 +208,7 @@ const Cart = () => {
               </div>
             );
           }
+          return null;
         })}
       </div>
       <div className="cart-bottom">
@@ -328,7 +361,7 @@ const Cart = () => {
             </div>
           )}
 
-          <button onClick={()=>navigate('/order')}>PROCEED TO CHECKOUT</button>
+          <button onClick={()=>navigate('/order')}>{checkoutButtonLabel}</button>
         </div>
         <div className="cart-promocode">
           <div>

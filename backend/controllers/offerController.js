@@ -2,12 +2,15 @@ import offerModel from "../models/offerModel.js";
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import couponModel from "../models/couponModel.js";
+import { getPaginationParams, buildPaginationMeta } from "../utils/pagination.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Get all active offers for users
 const getActiveOffers = async (req, res) => {
   try {
     const now = new Date();
     const userId = req.body.userId || null;
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     const offers = await offerModel
       .find({
@@ -54,13 +57,16 @@ const getActiveOffers = async (req, res) => {
       }
     }
 
-    res.status(200).json({
+    const total = eligibleOffers.length;
+    const paged = eligibleOffers.slice(skip, skip + limit);
+    sendSuccess(res, req, 200, {
       success: true,
-      data: eligibleOffers
+      data: paged,
+      pagination: buildPaginationMeta(total, page, limit),
     });
   } catch (error) {
     console.error("Error fetching offers:", error);
-    res.status(500).json({ success: false, message: "Error fetching offers" });
+    sendError(res, req, 500, "Error fetching offers");
   }
 };
 
@@ -70,10 +76,7 @@ const calculateDiscounts = async (req, res) => {
     const { orderAmount, paymentMethod, userId } = req.body;
 
     if (!orderAmount) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Order amount is required" 
-      });
+      return sendError(res, req, 400, "Order amount is required");
     }
 
     const now = new Date();
@@ -182,7 +185,7 @@ const calculateDiscounts = async (req, res) => {
     // Round discounts
     totalDiscount = Math.round(totalDiscount * 100) / 100;
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: {
         totalDiscount,
@@ -194,9 +197,7 @@ const calculateDiscounts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error calculating discounts:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error calculating discounts",
+    sendError(res, req, 500, "Error calculating discounts", {
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -205,9 +206,7 @@ const calculateDiscounts = async (req, res) => {
 // Admin: Get all offers
 const getAllOffers = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     const query = {};
     if (req.query.isActive !== undefined) {
@@ -225,19 +224,14 @@ const getAllOffers = async (req, res) => {
 
     const total = await offerModel.countDocuments(query);
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: offers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      }
+      pagination: buildPaginationMeta(total, page, limit),
     });
   } catch (error) {
     console.error("Error fetching offers:", error);
-    res.status(500).json({ success: false, message: "Error fetching offers" });
+    sendError(res, req, 500, "Error fetching offers");
   }
 };
 
@@ -307,7 +301,7 @@ const createOffer = async (req, res) => {
       offer.couponCode = couponCode;
       await offer.save();
 
-      res.status(201).json({
+      sendSuccess(res, req, 201, {
         success: true,
         message: "Offer created successfully with coupon code",
         data: {
@@ -318,7 +312,7 @@ const createOffer = async (req, res) => {
     } catch (couponError) {
       console.error("Error creating coupon for offer:", couponError);
       // Offer is created but coupon creation failed - still return success
-      res.status(201).json({
+      sendSuccess(res, req, 201, {
         success: true,
         message: "Offer created successfully, but coupon code generation failed",
         data: offer,
@@ -328,12 +322,10 @@ const createOffer = async (req, res) => {
   } catch (error) {
     console.error("Error creating offer:", error);
     if (error.code === 11000) {
-      res.status(400).json({ success: false, message: "Offer with this title already exists" });
+      sendError(res, req, 400, "Offer with this title already exists");
     } else {
-      res.status(500).json({ 
-        success: false, 
-        message: "Error creating offer",
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      sendError(res, req, 500, "Error creating offer", {
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -352,20 +344,18 @@ const updateOffer = async (req, res) => {
     );
 
     if (!offer) {
-      return res.status(404).json({ success: false, message: "Offer not found" });
+      return sendError(res, req, 404, "Offer not found");
     }
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "Offer updated successfully",
       data: offer
     });
   } catch (error) {
     console.error("Error updating offer:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error updating offer",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    sendError(res, req, 500, "Error updating offer", {
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -378,16 +368,16 @@ const deleteOffer = async (req, res) => {
     const offer = await offerModel.findByIdAndDelete(offerId);
 
     if (!offer) {
-      return res.status(404).json({ success: false, message: "Offer not found" });
+      return sendError(res, req, 404, "Offer not found");
     }
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "Offer deleted successfully"
     });
   } catch (error) {
     console.error("Error deleting offer:", error);
-    res.status(500).json({ success: false, message: "Error deleting offer" });
+    sendError(res, req, 500, "Error deleting offer");
   }
 };
 
@@ -398,20 +388,20 @@ const toggleOfferStatus = async (req, res) => {
 
     const offer = await offerModel.findById(offerId);
     if (!offer) {
-      return res.status(404).json({ success: false, message: "Offer not found" });
+      return sendError(res, req, 404, "Offer not found");
     }
 
     offer.isActive = !offer.isActive;
     await offer.save();
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: `Offer ${offer.isActive ? 'activated' : 'deactivated'}`,
       data: offer
     });
   } catch (error) {
     console.error("Error toggling offer status:", error);
-    res.status(500).json({ success: false, message: "Error toggling offer status" });
+    sendError(res, req, 500, "Error toggling offer status");
   }
 };
 

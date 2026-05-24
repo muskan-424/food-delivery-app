@@ -9,6 +9,9 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+# Local-only docs (never commit — implementation plan / private notes)
+IMPLEMENTATION_PLAN.local.md
+
 # Environment Variables
 .env
 .env.local

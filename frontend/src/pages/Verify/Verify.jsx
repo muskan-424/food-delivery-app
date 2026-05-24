@@ -6,7 +6,7 @@ import axios from 'axios';
 import { toast } from "react-toastify";
 
 const Verify = () => {
-    const [searchParams,setSearchParams]=useSearchParams();
+    const [searchParams] = useSearchParams();
     const success=searchParams.get("success");
     const orderId=searchParams.get("orderId");
     const {url} =useContext(StoreContext);

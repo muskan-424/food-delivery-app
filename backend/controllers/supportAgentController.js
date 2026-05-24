@@ -1,6 +1,8 @@
 import SupportAgent from "../models/supportAgentModel.js";
 import userModel from "../models/userModel.js";
 import SupportTicket from "../models/supportTicketModel.js";
+import { getPaginationParams, buildPaginationMeta } from "../utils/pagination.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Create support agent
 const createAgent = async (req, res) => {
@@ -8,25 +10,19 @@ const createAgent = async (req, res) => {
     const { userId, agentName, email, phone, department, maxTickets, skills, workingHours } = req.body;
 
     if (!userId || !agentName || !email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "userId, agentName, and email are required" 
-      });
+      return sendError(res, req, 400, "userId, agentName, and email are required");
     }
 
     // Check if user exists
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Check if agent already exists
     const existingAgent = await SupportAgent.findOne({ userId });
     if (existingAgent) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Agent already exists for this user" 
-      });
+      return sendError(res, req, 400, "Agent already exists for this user");
     }
 
     const agent = new SupportAgent({
@@ -42,14 +38,14 @@ const createAgent = async (req, res) => {
 
     await agent.save();
 
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       message: "Support agent created successfully",
       data: agent
     });
   } catch (error) {
     console.error('Error creating agent:', error);
-    res.status(500).json({ success: false, message: "Error creating support agent" });
+    sendError(res, req, 500, "Error creating support agent");
   }
 };
 
@@ -57,20 +53,30 @@ const createAgent = async (req, res) => {
 const getAllAgents = async (req, res) => {
   try {
     const { status, department, isAvailable } = req.query;
+    const { page, limit, skip } = getPaginationParams(req.query);
     const query = {};
 
     if (status) query.status = status;
     if (department) query.department = department;
     if (isAvailable !== undefined) query.isAvailable = isAvailable === 'true';
 
-    const agents = await SupportAgent.find(query)
-      .populate('userId', 'name email profilePicture')
-      .sort({ agentName: 1 });
+    const [agents, total] = await Promise.all([
+      SupportAgent.find(query)
+        .populate('userId', 'name email profilePicture')
+        .sort({ agentName: 1 })
+        .skip(skip)
+        .limit(limit),
+      SupportAgent.countDocuments(query),
+    ]);
 
-    res.status(200).json({ success: true, data: agents });
+    sendSuccess(res, req, 200, {
+      success: true,
+      data: agents,
+      pagination: buildPaginationMeta(total, page, limit),
+    });
   } catch (error) {
     console.error('Error fetching agents:', error);
-    res.status(500).json({ success: false, message: "Error fetching agents" });
+    sendError(res, req, 500, "Error fetching agents");
   }
 };
 
@@ -83,7 +89,7 @@ const getAgent = async (req, res) => {
       .populate('userId', 'name email profilePicture');
 
     if (!agent) {
-      return res.status(404).json({ success: false, message: "Agent not found" });
+      return sendError(res, req, 404, "Agent not found");
     }
 
     // Get agent's current tickets
@@ -95,10 +101,10 @@ const getAgent = async (req, res) => {
     agent.currentTickets = currentTickets;
     await agent.save();
 
-    res.status(200).json({ success: true, data: agent });
+    sendSuccess(res, req, 200, { success: true, data: agent });
   } catch (error) {
     console.error('Error fetching agent:', error);
-    res.status(500).json({ success: false, message: "Error fetching agent" });
+    sendError(res, req, 500, "Error fetching agent");
   }
 };
 
@@ -110,7 +116,7 @@ const updateAgent = async (req, res) => {
 
     const agent = await SupportAgent.findById(agentId);
     if (!agent) {
-      return res.status(404).json({ success: false, message: "Agent not found" });
+      return sendError(res, req, 404, "Agent not found");
     }
 
     if (agentName) agent.agentName = agentName;
@@ -126,14 +132,14 @@ const updateAgent = async (req, res) => {
     agent.lastActive = new Date();
     await agent.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Agent updated successfully",
       data: agent
     });
   } catch (error) {
     console.error('Error updating agent:', error);
-    res.status(500).json({ success: false, message: "Error updating agent" });
+    sendError(res, req, 500, "Error updating agent");
   }
 };
 
@@ -144,7 +150,7 @@ const deleteAgent = async (req, res) => {
 
     const agent = await SupportAgent.findById(agentId);
     if (!agent) {
-      return res.status(404).json({ success: false, message: "Agent not found" });
+      return sendError(res, req, 404, "Agent not found");
     }
 
     // Check if agent has active tickets
@@ -154,21 +160,23 @@ const deleteAgent = async (req, res) => {
     });
 
     if (activeTickets > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Cannot delete agent with ${activeTickets} active tickets. Please reassign tickets first.` 
-      });
+      return sendError(
+        res,
+        req,
+        400,
+        `Cannot delete agent with ${activeTickets} active tickets. Please reassign tickets first.`
+      );
     }
 
     await SupportAgent.findByIdAndDelete(agentId);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Agent deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting agent:', error);
-    res.status(500).json({ success: false, message: "Error deleting agent" });
+    sendError(res, req, 500, "Error deleting agent");
   }
 };
 
@@ -180,7 +188,7 @@ const getAgentStats = async (req, res) => {
 
     const agent = await SupportAgent.findById(agentId);
     if (!agent) {
-      return res.status(404).json({ success: false, message: "Agent not found" });
+      return sendError(res, req, 404, "Agent not found");
     }
 
     const dateQuery = {};
@@ -209,10 +217,10 @@ const getAgentStats = async (req, res) => {
       utilizationRate: ((agent.currentTickets / agent.maxTickets) * 100).toFixed(2)
     };
 
-    res.status(200).json({ success: true, data: stats });
+    sendSuccess(res, req, 200, { success: true, data: stats });
   } catch (error) {
     console.error('Error fetching agent stats:', error);
-    res.status(500).json({ success: false, message: "Error fetching agent statistics" });
+    sendError(res, req, 500, "Error fetching agent statistics");
   }
 };
 
@@ -220,35 +228,29 @@ const getAgentStats = async (req, res) => {
 const getAgentTickets = async (req, res) => {
   try {
     const { agentId } = req.params;
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     const query = { assignedTo: agentId };
     if (status) query.status = status;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const tickets = await SupportTicket.find(query)
       .populate('userId', 'name email')
       .populate('orderId', 'orderNumber')
       .sort({ priority: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limit);
 
     const total = await SupportTicket.countDocuments(query);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       data: tickets,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
+      pagination: buildPaginationMeta(total, page, limit),
     });
   } catch (error) {
     console.error('Error fetching agent tickets:', error);
-    res.status(500).json({ success: false, message: "Error fetching agent tickets" });
+    sendError(res, req, 500, "Error fetching agent tickets");
   }
 };
 
@@ -293,7 +295,7 @@ const getDashboardStats = async (req, res) => {
       other: await SupportTicket.countDocuments({ category: 'other', status: { $ne: 'closed' } })
     };
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       data: {
         tickets: {
@@ -322,7 +324,7 @@ const getDashboardStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({ success: false, message: "Error fetching dashboard statistics" });
+    sendError(res, req, 500, "Error fetching dashboard statistics");
   }
 };
 

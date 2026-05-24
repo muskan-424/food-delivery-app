@@ -1,12 +1,23 @@
 import mongoose from "mongoose";
 import { encryptField, decryptField } from "../utils/encryptionUtils.js";
 
+const orderItemModifierSchema = new mongoose.Schema(
+  {
+    groupKey: { type: String, required: true },
+    optionKey: { type: String, required: true },
+    label: { type: String, default: "" },
+    priceDelta: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const orderItemSchema = new mongoose.Schema({
   foodId: { type: mongoose.Schema.Types.ObjectId, ref: 'food', required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   quantity: { type: Number, required: true },
-  image: { type: String }
+  image: { type: String },
+  modifiers: { type: [orderItemModifierSchema], default: [] },
 }, { _id: false });
 
 const orderStatusHistorySchema = new mongoose.Schema({
@@ -15,6 +26,17 @@ const orderStatusHistorySchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   updatedBy: { type: String, default: 'system' } // 'system', 'admin', 'delivery_person'
 }, { _id: false });
+
+const scheduledSlotSchema = new mongoose.Schema(
+  {
+    slotId: { type: String, default: "" },
+    date: { type: String, default: "" }, // YYYY-MM-DD
+    startTime: { type: String, default: "" }, // HH:mm
+    endTime: { type: String, default: "" }, // HH:mm
+    label: { type: String, default: "" },
+  },
+  { _id: false }
+);
 
 // Encrypt address fields before saving
 const encryptAddressFields = (address) => {
@@ -54,6 +76,10 @@ const orderSchema = new mongoose.Schema({
   items: [orderItemSchema],
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'restaurant', default: null },
   amount: { type: Number, required: true },
+  /** Optional driver/restaurant tip (included in finalAmount) */
+  tipAmount: { type: Number, default: 0 },
+  /** Platform service fee computed at checkout (included in finalAmount) */
+  serviceFeeAmount: { type: Number, default: 0 },
   deliveryFee: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
   couponCode: { type: String, default: '' },
@@ -97,37 +123,84 @@ const orderSchema = new mongoose.Schema({
   deliveryPersonId: { type: mongoose.Schema.Types.ObjectId, ref: 'deliveryPerson', default: null },
   estimatedDeliveryTime: { type: Date },
   deliveredAt: { type: Date },
+  /** Optional scheduled delivery window (Phase 2); null = ASAP */
+  scheduledFor: { type: Date, default: null, index: true },
+  /** Optional slot-based schedule (Phase 2) */
+  scheduledSlot: { type: scheduledSlotSchema, default: null },
+  /** When menu prices were frozen for this order */
+  menuPricedAt: { type: Date, default: null },
+  /** True if commitStockForLines ran at checkout — restore on cancel */
+  inventoryReserved: { type: Boolean, default: false },
+  commissionSnapshot: {
+    percent: { type: Number, default: 0 },
+    basisAmount: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+    estimatedRestaurantNet: { type: Number, default: 0 },
+  },
+  taxSnapshot: {
+    label: { type: String, default: "" },
+    ratePercent: { type: Number, default: 0 },
+    taxableBasis: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+    taxInclusiveMenu: { type: Boolean, default: false },
+  },
+  /** Surge / time-based multiplier applied to line unit prices at checkout (Phase 7) */
+  dynamicPricingSnapshot: {
+    multiplier: { type: Number, default: 1 },
+    ruleId: { type: String, default: "" },
+    label: { type: String, default: "" },
+    source: { type: String, default: "" },
+    appliedAt: { type: Date },
+  },
+  /** ETA from restaurant→customer (Phase 5); optional if coords missing */
+  deliveryEtaSnapshot: {
+    etaAt: { type: Date },
+    distanceKm: { type: Number },
+    estimatedMinutes: { type: Number },
+    source: { type: String, default: "" },
+    computedAt: { type: Date },
+  },
+  proofOfDelivery: {
+    method: {
+      type: String,
+      enum: ["none", "otp", "signature", "photo"],
+      default: "none",
+    },
+    verifiedAt: { type: Date },
+    note: { type: String, default: "" },
+    evidenceUrl: { type: String, default: "" },
+    signatureName: { type: String, default: "" },
+  },
+  /** Set when loyalty accrual runs for this order (Phase 7) */
+  loyaltyPointsEarned: { type: Number, default: null },
+  loyaltyAccruedAt: { type: Date, default: null },
+  /** Points spent at checkout (restored if order cancelled before delivery) */
+  loyaltyPointsRedeemed: { type: Number, default: 0 },
+  loyaltyRedeemInr: { type: Number, default: 0 },
+  /** Optional group-order linkage (Phase 10 baseline) */
+  groupOrder: {
+    sessionId: { type: String, default: "" },
+    inviteCode: { type: String, default: "" },
+    leaderUserId: { type: String, default: "" },
+    memberCount: { type: Number, default: 0 },
+  },
   date: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Pre-save hook for status history, timestamps, and encryption
+// Pre-save: order number fallback, address encryption, timestamps (status history via orderTransitionService)
 orderSchema.pre('save', async function(next) {
-  // Generate order number if not provided (fallback)
   if (!this.orderNumber) {
     const timestamp = Date.now().toString().slice(-8);
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     this.orderNumber = `ORD${timestamp}${random}`;
   }
-  
-  // Encrypt address fields if not already encrypted
+
   if (this.address) {
     this.address = encryptAddressFields(this.address);
   }
-  
-  // Add status to history
-  if (this.isModified('status')) {
-    if (!this.statusHistory) {
-      this.statusHistory = [];
-    }
-    this.statusHistory.push({
-      status: this.status,
-      timestamp: new Date(),
-      updatedBy: 'system'
-    });
-  }
-  
+
   this.updatedAt = Date.now();
   next();
 });

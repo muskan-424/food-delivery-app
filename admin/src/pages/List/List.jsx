@@ -6,8 +6,6 @@ import { useContext } from "react";
 import { StoreContext } from "../../context/StoreContext";
 import { useNavigate } from "react-router-dom";
 import { formatCurrency } from "../../utils/currency";
-import { assets } from "../../assets/assets";
-
 const List = ({ url }) => {
   const navigate = useNavigate();
   const { token, admin } = useContext(StoreContext);
@@ -22,6 +20,13 @@ const List = ({ url }) => {
     isAvailable: true
   });
   const [editImage, setEditImage] = useState(null);
+
+  const resolveImageUrl = (imageUrl, image) => {
+    if (imageUrl) return imageUrl;
+    if (!image) return "";
+    if (String(image).startsWith("http")) return image;
+    return `${url}/images/${image}`;
+  };
 
   const fetchList = async () => {
     try {
@@ -90,23 +95,38 @@ const List = ({ url }) => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const formData = new FormData();
-      formData.append("name", editData.name);
-      formData.append("description", editData.description);
-      formData.append("price", Number(editData.price));
-      formData.append("category", editData.category);
-      formData.append("isAvailable", editData.isAvailable);
+      const payload = {
+        name: editData.name,
+        description: editData.description,
+        price: Number(editData.price),
+        category: editData.category,
+        isAvailable: editData.isAvailable,
+      };
       if (editImage) {
-        formData.append("image", editImage);
+        const ext = (editImage.name?.split(".").pop() || "jpg").toLowerCase();
+        const contentType = editImage.type || "image/jpeg";
+        const uploadMeta = await axios.post(
+          `${url}/api/food/image/upload-url`,
+          { ext, contentType },
+          { headers: { token } }
+        );
+        if (!uploadMeta.data?.success) {
+          toast.error(uploadMeta.data?.message || "Failed to prepare image upload");
+          return;
+        }
+        const { uploadUrl, key } = uploadMeta.data.data || {};
+        await axios.put(uploadUrl, editImage, {
+          headers: { "Content-Type": contentType },
+        });
+        payload.imageKey = key;
       }
 
       const response = await axios.put(
         `${url}/api/food/${editingFood._id}`,
-        formData,
+        payload,
         {
           headers: {
             token,
-            "Content-Type": "multipart/form-data"
           }
         }
       );
@@ -147,7 +167,7 @@ const List = ({ url }) => {
         {list.map((item, index) => {
           return (
             <div key={index} className="list-table-format">
-              <img src={`${url}/images/` + item.image} alt="" />
+              <img src={resolveImageUrl(item.imageUrl, item.image)} alt="" />
               <p>{item.name}</p>
               <p>{item.category}</p>
               <p>{formatCurrency(item.price)}</p>
@@ -238,7 +258,7 @@ const List = ({ url }) => {
                 />
                 {!editImage && editingFood.image && (
                   <img 
-                    src={`${url}/images/${editingFood.image}`} 
+                    src={resolveImageUrl(editingFood.imageUrl, editingFood.image)} 
                     alt="Current" 
                     style={{ maxWidth: "100px", marginTop: "10px" }}
                   />

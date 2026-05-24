@@ -110,7 +110,8 @@ const CreateAdmin = ({ url }) => {
       return false;
     }
     
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    const specialChars = "!@#$%^&*()_+-=[]{};'\":\\|,.<>/?";
+    if (![...password].some((ch) => specialChars.includes(ch))) {
       toast.error("Password must contain at least one special character");
       return false;
     }

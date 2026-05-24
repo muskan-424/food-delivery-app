@@ -1,0 +1,84 @@
+.open-dispute-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.open-dispute-modal {
+  background: #fff;
+  border-radius: 12px;
+  max-width: 480px;
+  width: 100%;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.open-dispute-modal h3 {
+  margin: 0 0 8px;
+}
+
+.open-dispute-order {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.open-dispute-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.open-dispute-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #333;
+}
+
+.open-dispute-label input,
+.open-dispute-label select,
+.open-dispute-label textarea {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.open-dispute-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.open-dispute-actions .btn-primary {
+  background: tomato;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.open-dispute-actions .btn-secondary {
+  background: #f0f0f0;
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.open-dispute-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -14,7 +14,12 @@ import Wishlist from "./pages/Wishlist/Wishlist";
 import Profile from "./pages/Profile/Profile";
 import PaymentHistory from "./pages/PaymentHistory/PaymentHistory";
 import Support from "./pages/Support/Support";
+import PartnerPayouts from "./pages/PartnerPayouts/PartnerPayouts";
+import MyDisputes from "./pages/MyDisputes/MyDisputes";
+import PartnerKyc from "./pages/PartnerKyc/PartnerKyc";
+import GroupOrders from "./pages/GroupOrders/GroupOrders";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
+import ExperimentDebugBadge from "./components/ExperimentDebugBadge/ExperimentDebugBadge";
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(false);
@@ -34,7 +39,12 @@ const App = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/payments" element={<PaymentHistory />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/partner/payouts" element={<PartnerPayouts />} />
+          <Route path="/partner/kyc" element={<PartnerKyc />} />
+          <Route path="/group-orders" element={<GroupOrders />} />
+          <Route path="/my-disputes" element={<MyDisputes />} />
         </Routes>
+        <ExperimentDebugBadge />
       </div>
       <Footer />
     </ErrorBoundary>

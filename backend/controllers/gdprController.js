@@ -2,6 +2,13 @@ import { exportUserData, anonymizeUser, deleteUserData } from "../utils/dataAnon
 import userModel from "../models/userModel.js";
 import fs from "fs";
 import path from "path";
+import {
+  getRetentionPolicies,
+  getLastDataRetentionRun,
+  runDataRetentionCleanup,
+  runDataRetentionDryRun,
+} from "../utils/dataRetention.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 /**
  * Export user data (GDPR Right to Data Portability)
@@ -12,7 +19,7 @@ const exportUserDataRequest = async (req, res) => {
     
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Mark export request
@@ -33,7 +40,7 @@ const exportUserDataRequest = async (req, res) => {
     const filepath = path.join(exportDir, filename);
     fs.writeFileSync(filepath, JSON.stringify(userData, null, 2));
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "Data export generated successfully",
       data: userData,
@@ -42,7 +49,7 @@ const exportUserDataRequest = async (req, res) => {
     });
   } catch (error) {
     console.error("Error exporting user data:", error);
-    res.status(500).json({ success: false, message: "Error exporting user data" });
+    sendError(res, req, 500, "Error exporting user data");
   }
 };
 
@@ -56,24 +63,24 @@ const downloadExport = async (req, res) => {
 
     // Validate filename (prevent path traversal)
     if (!filename || filename.includes('..') || !filename.startsWith(`user_${userId}_`)) {
-      return res.status(400).json({ success: false, message: "Invalid file" });
+      return sendError(res, req, 400, "Invalid file");
     }
 
     const filepath = path.join(process.cwd(), 'exports', filename);
     
     if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ success: false, message: "Export file not found" });
+      return sendError(res, req, 404, "Export file not found");
     }
 
     res.download(filepath, `user_data_export_${Date.now()}.json`, (err) => {
       if (err) {
         console.error("Error downloading file:", err);
-        res.status(500).json({ success: false, message: "Error downloading file" });
+        sendError(res, req, 500, "Error downloading file");
       }
     });
   } catch (error) {
     console.error("Error downloading export:", error);
-    res.status(500).json({ success: false, message: "Error downloading export" });
+    sendError(res, req, 500, "Error downloading export");
   }
 };
 
@@ -86,19 +93,19 @@ const requestDataDeletion = async (req, res) => {
     const { password } = req.body; // Require password confirmation
 
     if (!password) {
-      return res.status(400).json({ success: false, message: "Password required for data deletion" });
+      return sendError(res, req, 400, "Password required for data deletion");
     }
 
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Verify password
     const bcrypt = (await import("bcrypt")).default;
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid password" });
+      return sendError(res, req, 401, "Invalid password");
     }
 
     // Mark deletion request
@@ -106,14 +113,14 @@ const requestDataDeletion = async (req, res) => {
     user.dataDeletionRequestedAt = new Date();
     await user.save();
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "Data deletion request submitted. Your data will be deleted within 30 days.",
       deletionScheduledAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     });
   } catch (error) {
     console.error("Error requesting data deletion:", error);
-    res.status(500).json({ success: false, message: "Error requesting data deletion" });
+    sendError(res, req, 500, "Error requesting data deletion");
   }
 };
 
@@ -129,18 +136,18 @@ const anonymizeUserData = async (req, res) => {
 
     // User can only anonymize their own data, admin can anonymize any user
     if (userRole !== 'admin' && targetUserId !== userId) {
-      return res.status(403).json({ success: false, message: "Unauthorized" });
+      return sendError(res, req, 403, "Unauthorized");
     }
 
     await anonymizeUser(targetUserId);
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "User data anonymized successfully"
     });
   } catch (error) {
     console.error("Error anonymizing user data:", error);
-    res.status(500).json({ success: false, message: "Error anonymizing user data" });
+    sendError(res, req, 500, "Error anonymizing user data");
   }
 };
 
@@ -157,30 +164,96 @@ const deleteUserDataCompletely = async (req, res) => {
     if (userRole !== 'admin') {
       const user = await userModel.findById(targetUserId);
       if (!user || !user.dataDeletionRequested) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Data deletion must be requested first" 
-        });
+        return sendError(res, req, 400, "Data deletion must be requested first");
       }
 
       const daysSinceRequest = (Date.now() - user.dataDeletionRequestedAt) / (1000 * 60 * 60 * 24);
       if (daysSinceRequest < 30) {
-        return res.status(400).json({
-          success: false,
-          message: `Data deletion will be processed after 30 days. ${Math.ceil(30 - daysSinceRequest)} days remaining.`
-        });
+        return sendError(
+          res,
+          req,
+          400,
+          `Data deletion will be processed after 30 days. ${Math.ceil(30 - daysSinceRequest)} days remaining.`
+        );
       }
     }
 
     await deleteUserData(targetUserId);
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       message: "User data deleted completely"
     });
   } catch (error) {
     console.error("Error deleting user data:", error);
-    res.status(500).json({ success: false, message: "Error deleting user data" });
+    sendError(res, req, 500, "Error deleting user data");
+  }
+};
+
+/**
+ * Admin: View configured retention policies.
+ */
+const getRetentionPolicyInfo = async (req, res) => {
+  try {
+    return sendSuccess(res, req, 200, {
+      success: true,
+      data: {
+        policies: getRetentionPolicies(),
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Error loading retention policies:", error);
+    return sendError(res, req, 500, "Error loading retention policies");
+  }
+};
+
+/**
+ * Admin: View last scheduled/manual data retention run status.
+ */
+const getRetentionLastRunInfo = async (req, res) => {
+  try {
+    return sendSuccess(res, req, 200, {
+      success: true,
+      data: {
+        ...getLastDataRetentionRun(),
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Error loading retention run status:", error);
+    return sendError(res, req, 500, "Error loading retention run status");
+  }
+};
+
+/**
+ * Admin: run retention cleanup now (supports dry-run preview).
+ */
+const runRetentionNow = async (req, res) => {
+  try {
+    const dryRun =
+      req.body?.dryRun === true ||
+      String(req.body?.dryRun || "").toLowerCase() === "true";
+    if (dryRun) {
+      const preview = await runDataRetentionDryRun();
+      return sendSuccess(res, req, 200, {
+        success: true,
+        message: "Retention dry-run completed",
+        data: preview,
+      });
+    }
+    const results = await runDataRetentionCleanup();
+    return sendSuccess(res, req, 200, {
+      success: true,
+      message: "Retention cleanup completed",
+      data: {
+        results,
+        lastRun: getLastDataRetentionRun(),
+      },
+    });
+  } catch (error) {
+    console.error("Error running retention cleanup:", error);
+    return sendError(res, req, 500, "Error running retention cleanup");
   }
 };
 
@@ -189,6 +262,9 @@ export {
   downloadExport,
   requestDataDeletion,
   anonymizeUserData,
-  deleteUserDataCompletely
+  deleteUserDataCompletely,
+  getRetentionPolicyInfo,
+  getRetentionLastRunInfo,
+  runRetentionNow,
 };
 

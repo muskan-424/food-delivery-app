@@ -1,9 +1,14 @@
 import express from "express";
+import http from "http";
 import cors from "cors";
 import helmet from "helmet";
 import multer from "multer";
 import "dotenv/config";
 import { connectDB } from "./config/db.js";
+import { appConfig } from "./config/appConfig.js";
+import { requestIdMiddleware } from "./middleware/requestId.js";
+import { sendError } from "./utils/apiResponse.js";
+import { startJobQueue } from "./jobs/queue.js";
 import foodRouter from "./routes/foodRoute.js";
 import userRouter from "./routes/userRoute.js";
 import cartRouter from "./routes/cartRoute.js";
@@ -19,7 +24,9 @@ import locationRouter from "./routes/locationRoute.js";
 import restaurantRouter from "./routes/restaurantRoute.js";
 import supportRouter from "./routes/supportRoute.js";
 import paymentRouter from "./routes/paymentRoute.js";
+import paymentWebhookRouter from "./routes/paymentWebhookRoute.js";
 import offerRouter from "./routes/offerRoute.js";
+import searchRouter from "./routes/searchRoute.js";
 import userManagementRouter from "./routes/userManagementRoute.js";
 import authRouter from "./routes/authRoute.js";
 import gdprRouter from "./routes/gdprRoute.js";
@@ -27,13 +34,28 @@ import activityLogger from "./middleware/activityLogger.js";
 import csrfMiddleware from "./middleware/csrfMiddleware.js";
 import httpsEnforcement from "./middleware/httpsEnforcement.js";
 import dataMaskingMiddleware from "./middleware/dataMaskingMiddleware.js";
+import healthRouter from "./routes/healthRoute.js";
+import notificationRouter from "./routes/notificationRoute.js";
+import disputeRouter from "./routes/disputeRoute.js";
+import partnerApiRouter from "./routes/partnerApiRoute.js";
+import { initWebsocketServer } from "./realtime/wsHub.js";
 
 // app config
 const app = express();
+const httpServer = http.createServer(app);
 const port = process.env.PORT || 4000;
 
-// Body parsing middleware with size limits
-app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
+app.use(requestIdMiddleware);
+
+// Body parsing (rawBody used for payment webhook HMAC verification)
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // HTTPS enforcement (in production)
@@ -69,6 +91,9 @@ app.use(helmet({
   contentSecurityPolicy: false // Disable CSP for images (or configure properly)
 }));
 
+// Health check (used by Docker / load balancers; keep before heavy middleware)
+app.use("/api/health", healthRouter);
+
 // Activity logging middleware (after body parsing, before routes)
 app.use(activityLogger);
 
@@ -83,17 +108,21 @@ app.use("/api/wishlist", csrfMiddleware);
 app.use("/api/payment", csrfMiddleware);
 app.use("/api/admin/users", csrfMiddleware);
 app.use("/api/gdpr", csrfMiddleware);
+app.use("/api/notifications", csrfMiddleware);
+app.use("/api/disputes", csrfMiddleware);
 
 // DB connection
 connectDB();
 
-// Initialize scheduled jobs (data retention) - async import
-if (process.env.ENABLE_SCHEDULED_JOBS === 'true') {
-  import("./utils/scheduledJobs.js").then(module => {
-    module.initializeScheduledJobs();
-  }).catch(err => {
-    console.error('Error initializing scheduled jobs:', err);
-  });
+const queueRuntime = startJobQueue();
+
+// Initialize scheduled jobs on queue (data retention, loyalty expiry)
+if (appConfig.enableScheduledJobs) {
+  import("./utils/scheduledJobs.js")
+    .then((module) => module.initializeScheduledJobs(queueRuntime?.queue || null))
+    .catch((err) => {
+      console.error("Error initializing scheduled jobs:", err);
+    });
 }
 
 // Root endpoint
@@ -120,55 +149,52 @@ app.use("/api/delivery", deliveryRouter);
 app.use("/api/location", locationRouter);
 app.use("/api/restaurant", restaurantRouter);
 app.use("/api/support", supportRouter);
+app.use("/api/payment/webhook", paymentWebhookRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/offer", offerRouter);
+app.use("/api/search", searchRouter);
+// Mask responses for admin user-management API (must run before the router on the same path)
+app.use("/api/admin/users", dataMaskingMiddleware({ maskForAdmin: true, maskForList: true }));
 app.use("/api/admin/users", userManagementRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/gdpr", gdprRouter);
-
-// Apply data masking middleware to user management routes
-app.use("/api/user-management", dataMaskingMiddleware({ maskForAdmin: true, maskForList: true }));
+app.use("/api/notifications", notificationRouter);
+app.use("/api/disputes", disputeRouter);
+app.use("/api/partner", partnerApiRouter);
 
 // Error handling middleware for multer file upload errors
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ 
-        success: false, 
-        message: "File too large. Maximum size is 5MB." 
-      });
+      return sendError(res, req, 400, "File too large. Maximum size is 5MB.");
     }
-    return res.status(400).json({ 
-      success: false, 
-      message: error.message 
-    });
+    return sendError(res, req, 400, error.message);
   }
   if (error.message === "Only image files are allowed (jpeg, jpg, png, gif, webp)") {
-    return res.status(400).json({ 
-      success: false, 
-      message: error.message 
-    });
+    return sendError(res, req, 400, error.message);
   }
   next(error);
 });
 
 // 404 handler (must be after all routes)
 app.use((req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    message: "Route not found" 
-  });
+  sendError(res, req, 404, "Route not found");
 });
 
 // Global error handler (must be last)
 app.use((error, req, res, next) => {
   console.error("Unhandled error:", error);
-  res.status(500).json({ 
-    success: false, 
-    message: "Internal server error" 
-  });
+  const extra =
+    process.env.NODE_ENV === "development"
+      ? { detail: error.message }
+      : {};
+  sendError(res, req, 500, "Internal server error", extra);
 });
 
-app.listen(port, () => {
+initWebsocketServer(httpServer).catch((err) => {
+  console.error("WebSocket init error:", err?.message || err);
+});
+
+httpServer.listen(port, () => {
   console.log(`Server Started on port: ${port}`);
 });

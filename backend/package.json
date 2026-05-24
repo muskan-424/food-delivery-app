@@ -5,20 +5,30 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "start": "node server.js",
     "server": "nodemon server.js",
-    "create-admin": "node scripts/createFirstAdmin.js"
+    "create-admin": "node scripts/createFirstAdmin.js",
+    "test:setup": "node test-setup.js",
+    "test:smoke": "node smoke-test.js",
+    "reset-password": "node scripts/resetUserPassword.js",
+    "purge-test-users": "node scripts/purgeTestUsers.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1025.0",
+    "@aws-sdk/s3-request-presigner": "^3.1025.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^1.20.2",
+    "bullmq": "^5.71.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.3.0",
     "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.2",
     "multer": "^1.4.5-lts.1",
@@ -26,7 +36,10 @@
     "nodemailer": "^7.0.11",
     "nodemon": "^3.1.4",
     "qrcode": "^1.5.4",
+    "rate-limit-redis": "^4.3.1",
+    "razorpay": "^2.9.6",
     "sentiment": "^5.0.2",
+    "socket.io": "^4.8.3",
     "speakeasy": "^2.0.0",
     "validator": "^13.12.0"
   }

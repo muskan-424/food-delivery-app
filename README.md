@@ -96,6 +96,10 @@ chmod +x scripts/setup-dev.sh
 # Create first admin
 cd backend && npm run create-admin
 
+# (Optional) Verify backend — config check + smoke tests
+cd backend && npm run test:setup
+cd backend && npm run test:smoke   # requires server running
+
 # Start development servers (3 terminals)
 cd backend && npm run server    # Terminal 1: Backend (port 4000)
 cd frontend && npm run dev      # Terminal 2: Frontend (port 5173)

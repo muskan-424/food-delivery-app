@@ -17,6 +17,10 @@ const csrfMiddleware = async (req, res, next) => {
     return next();
   }
 
+  if (req.originalUrl.includes("/api/payment/webhook")) {
+    return next();
+  }
+
   const userId = req.body.userId;
   if (!userId) {
     // If not authenticated, skip CSRF (auth middleware will handle it)

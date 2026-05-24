@@ -1,16 +1,168 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import "./PlaceOrder.css";
 import { StoreContext } from "../../context/StoreContext";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AddressManager from "../../components/AddressManager/AddressManager";
 import { formatCurrency } from "../../utils/currency";
+import { grossFromExclusive } from "../../utils/menuTaxDisplay";
+import useExperiment from "../../hooks/useExperiment";
+
+function loadRazorpayScript() {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== "undefined" && window.Razorpay) {
+      resolve();
+      return;
+    }
+    const existing = document.querySelector("script[data-razorpay-checkout]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Razorpay script failed")), {
+        once: true,
+      });
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    s.setAttribute("data-razorpay-checkout", "1");
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Razorpay script failed to load"));
+    document.body.appendChild(s);
+  });
+}
+
+function formatRetrySeconds(data) {
+  const sec = Number(data?.retryAfterSeconds);
+  if (!Number.isFinite(sec) || sec <= 0) return null;
+  return Math.max(1, Math.ceil(sec));
+}
+
+function buildRazorpayRetryMessage(data) {
+  const retryIn = formatRetrySeconds(data);
+  const attempts = Number(data?.attemptsInWindow);
+  const maxAttempts = Number(data?.maxAttemptsPerHour);
+  const attemptsKnown =
+    Number.isFinite(attempts) &&
+    attempts >= 0 &&
+    Number.isFinite(maxAttempts) &&
+    maxAttempts > 0;
+  if (retryIn && attemptsKnown) {
+    const left = Math.max(0, Math.floor(maxAttempts - attempts));
+    return `Please wait ${retryIn}s before retrying payment. Attempts left this hour: ${left}/${Math.floor(
+      maxAttempts
+    )}.`;
+  }
+  if (retryIn) {
+    return `Please wait ${retryIn}s before retrying payment.`;
+  }
+  if (attemptsKnown) {
+    const left = Math.max(0, Math.floor(maxAttempts - attempts));
+    return `Too many payment retries. Attempts left this hour: ${left}/${Math.floor(
+      maxAttempts
+    )}.`;
+  }
+  return null;
+}
+
+function extractRetryAttemptsMeta(data) {
+  const attempts = Number(data?.attemptsInWindow);
+  const maxAttempts = Number(data?.maxAttemptsPerHour);
+  if (!Number.isFinite(attempts) || !Number.isFinite(maxAttempts) || maxAttempts <= 0) {
+    return null;
+  }
+  return {
+    attemptsLeft: Math.max(0, Math.floor(maxAttempts - attempts)),
+    maxAttempts: Math.floor(maxAttempts),
+  };
+}
+
+const SLOT_WINDOW_DAYS = 7;
+const SLOT_START_HOUR = 9;
+const SLOT_END_HOUR = 22;
+const SLOT_INTERVAL_MINUTES = 30;
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function buildDateLabel(dateStr) {
+  const dt = new Date(`${dateStr}T00:00:00`);
+  return dt.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function buildSlotId(date, startTime, endTime) {
+  return `${date}|${startTime}-${endTime}`;
+}
+
+function parseSlotId(slotId) {
+  const match =
+    /^(\d{4}-\d{2}-\d{2})\|(([01]\d|2[0-3]):([0-5]\d))-(([01]\d|2[0-3]):([0-5]\d))$/.exec(
+      String(slotId || "")
+    );
+  if (!match) return null;
+  return {
+    date: match[1],
+    startTime: match[2],
+    endTime: match[5],
+  };
+}
+
+function buildUpcomingDates(windowDays = SLOT_WINDOW_DAYS) {
+  const today = new Date();
+  const dates = [];
+  for (let i = 0; i < windowDays; i += 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    dates.push(
+      `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+    );
+  }
+  return dates;
+}
+
+function buildSlotsForDate(dateStr) {
+  const now = new Date();
+  const isToday = dateStr === now.toISOString().slice(0, 10);
+  const cutoff = new Date(now.getTime() + 15 * 60 * 1000);
+  const slots = [];
+  for (let h = SLOT_START_HOUR; h < SLOT_END_HOUR; h += 1) {
+    for (let m = 0; m < 60; m += SLOT_INTERVAL_MINUTES) {
+      const startTime = `${pad2(h)}:${pad2(m)}`;
+      const endMinutes = m + SLOT_INTERVAL_MINUTES;
+      const endHour = h + Math.floor(endMinutes / 60);
+      const endMin = endMinutes % 60;
+      if (endHour > SLOT_END_HOUR || (endHour === SLOT_END_HOUR && endMin > 0)) {
+        continue;
+      }
+      const endTime = `${pad2(endHour)}:${pad2(endMin)}`;
+      if (isToday) {
+        const slotStart = new Date(`${dateStr}T${startTime}:00`);
+        if (slotStart <= cutoff) continue;
+      }
+      const id = buildSlotId(dateStr, startTime, endTime);
+      slots.push({
+        id,
+        date: dateStr,
+        startTime,
+        endTime,
+        label: `${startTime} - ${endTime}`,
+      });
+    }
+  }
+  return slots;
+}
 
 const PlaceOrder = () => {
   const navigate= useNavigate();
+  const location = useLocation();
 
-  const { getTotalCartAmount, token, food_list, cartItems, url, clearCart, loadCardData } =
+  const { getTotalCartAmount, token, food_list, cartLines, url, clearCart } =
     useContext(StoreContext);
   const [data, setData] = useState({
     firstName: "",
@@ -25,13 +177,16 @@ const PlaceOrder = () => {
   });
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
-  const [useSavedAddress, setUseSavedAddress] = useState(false);
+  const [, setUseSavedAddress] = useState(false);
   const [showAddressManager, setShowAddressManager] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
+  const [razorpayRetryMeta, setRazorpayRetryMeta] = useState(null);
+  const [checkoutHints, setCheckoutHints] = useState(null);
+  const [tipAmountInput, setTipAmountInput] = useState("");
   const [paymentDetails, setPaymentDetails] = useState({
     upiId: "",
     bankName: "",
@@ -45,7 +200,25 @@ const PlaceOrder = () => {
   const [deliveryFee, setDeliveryFee] = useState(2);
   const [freeDelivery, setFreeDelivery] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [deliveryMode, setDeliveryMode] = useState("asap");
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [selectedScheduledSlotId, setSelectedScheduledSlotId] = useState("");
+  const { variant: checkoutCtaVariant } = useExperiment("checkout_cta_v1");
+  const groupSessionId = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    const raw = String(params.get("groupSessionId") || "").trim();
+    return raw || "";
+  }, [location.search]);
   const FREE_DELIVERY_THRESHOLD = 150;
+  const scheduleDateOptions = useMemo(() => buildUpcomingDates(), []);
+  const selectedScheduleSlot = useMemo(
+    () => parseSlotId(selectedScheduledSlotId),
+    [selectedScheduledSlotId]
+  );
+  const availableScheduleSlots = useMemo(() => {
+    if (!scheduledDate) return [];
+    return buildSlotsForDate(scheduledDate);
+  }, [scheduledDate]);
 
   const onChangeHandler = (event) => {
     const name = event.target.name;
@@ -214,6 +387,28 @@ const PlaceOrder = () => {
     toast.info("Coupon removed");
   };
 
+  useEffect(() => {
+    if (!scheduledDate && scheduleDateOptions.length > 0) {
+      setScheduledDate(scheduleDateOptions[0]);
+    }
+  }, [scheduledDate, scheduleDateOptions]);
+
+  useEffect(() => {
+    if (deliveryMode !== "scheduled") return;
+    if (!scheduledDate) return;
+    const slots = buildSlotsForDate(scheduledDate);
+    const selectedStillValid = slots.some((slot) => slot.id === selectedScheduledSlotId);
+    if (!selectedStillValid) {
+      setSelectedScheduledSlotId(slots[0]?.id || "");
+    }
+  }, [deliveryMode, scheduledDate, selectedScheduledSlotId]);
+
+  useEffect(() => {
+    if (paymentMethod !== "razorpay") {
+      setRazorpayRetryMeta(null);
+    }
+  }, [paymentMethod]);
+
   const placeOrder = async (event) => {
     event.preventDefault();
     
@@ -266,15 +461,33 @@ const PlaceOrder = () => {
     }
     
     let orderItems = [];
-    food_list.map((item) => {
-      if (cartItems[item._id] > 0) {
+    Object.entries(cartLines).forEach(([lineKey, qty]) => {
+      const [itemId, encodedModifiers] = lineKey.split("::");
+      const item = food_list.find((x) => x._id === itemId);
+      if (item && qty > 0) {
+        let modifiers = [];
+        try {
+          modifiers = encodedModifiers ? JSON.parse(encodedModifiers) : [];
+        } catch {
+          modifiers = [];
+        }
+        let unitExclusive = Number(item.price) || 0;
+        for (const mod of modifiers) {
+          const group = (item.modifierGroups || []).find((g) => g.key === mod.groupKey);
+          for (const optionKey of mod.optionKeys || []) {
+            const opt = (group?.options || []).find((o) => o.key === optionKey);
+            if (opt) unitExclusive += Number(opt.priceDelta) || 0;
+          }
+        }
+        const unitPrice = grossFromExclusive(unitExclusive, item.restaurantMenuTax);
         let itemInfo = {
           id: item._id,
           foodId: item._id,
           name: item.name,
-          price: item.price,
-          quantity: cartItems[item._id],
-          image: item.image
+          price: unitPrice,
+          quantity: qty,
+          image: item.image,
+          modifiers,
         };
         orderItems.push(itemInfo);
       }
@@ -318,53 +531,162 @@ const PlaceOrder = () => {
       }
     }
     
+    const tipParsed = parseFloat(String(tipAmountInput || "").trim());
+    const tipForOrder =
+      Number.isFinite(tipParsed) && tipParsed > 0 ? Math.round(tipParsed * 100) / 100 : 0;
+    if (tipForOrder > tipAllowedMax + 1e-6) {
+      toast.error(`Tip cannot exceed ${formatCurrency(tipAllowedMax)} for this order`);
+      return;
+    }
+
     let orderData = {
       address: addressData,
       items: orderItems,
       amount: getTotalCartAmount(),
+      tipAmount: tipForOrder,
       couponCode: couponApplied ? couponCode.trim() : '',
       paymentMethod: paymentMethod,
-      paymentProvider: paymentMethod === 'upi' ? detectedUPIProvider : 
-                      paymentMethod === 'wallet' ? paymentDetails.walletName : 
-                      paymentMethod === 'netbanking' ? paymentDetails.bankName : '',
-      paymentDetails: paymentDetails
+      paymentProvider:
+        paymentMethod === "upi"
+          ? detectedUPIProvider
+          : paymentMethod === "wallet"
+            ? paymentDetails.walletName
+            : paymentMethod === "netbanking"
+              ? paymentDetails.bankName
+              : paymentMethod === "razorpay"
+                ? "razorpay"
+                : "",
+      paymentDetails: paymentDetails,
+      ...(groupSessionId ? { groupSessionId } : {}),
     };
-    
+    if (deliveryMode === "scheduled") {
+      if (!selectedScheduledSlotId) {
+        toast.error("Please choose a delivery slot");
+        return;
+      }
+      orderData.scheduledSlotId = selectedScheduledSlotId;
+    }
+
+    const afterOrderPlaced = async () => {
+      await clearCart();
+      if (!selectedAddressId && addressData.firstName && addressData.street && addressData.city) {
+        try {
+          await axios.post(
+            url + "/api/address",
+            {
+              type: "home",
+              name: `${addressData.firstName} ${addressData.lastName}`.trim(),
+              email: (addressData.email && addressData.email.trim()) || "",
+              phone: addressData.phone,
+              addressLine1: addressData.street,
+              city: addressData.city,
+              state: addressData.state,
+              pincode: addressData.zipcode,
+              country: addressData.country || "",
+              isDefault: savedAddresses.length === 0,
+            },
+            { headers: { token } }
+          );
+          await loadSavedAddresses();
+        } catch (addrError) {
+          console.error("Error saving address:", addrError);
+        }
+      }
+    };
+
     try {
-      let response = await axios.post(url+"/api/order/place", orderData, {headers:{token}});
-      if(response.data.success){
-        toast.success("Order placed successfully!");
-        
-        // Clear cart immediately after successful order placement
-        await clearCart();
-        
-        // Auto-save address if not using saved address and form has valid data
-        if (!selectedAddressId && addressData.firstName && addressData.street && addressData.city) {
+      let response = await axios.post(url + "/api/order/place", orderData, {
+        headers: { token },
+      });
+      if (response.data.success) {
+        if (paymentMethod === "razorpay") {
+          await afterOrderPlaced();
+          toast.success("Order created — complete payment in the secure window.");
           try {
-            await axios.post(
-              url + "/api/address",
-              {
-                type: 'home',
-                name: `${addressData.firstName} ${addressData.lastName}`.trim(),
-                email: (addressData.email && addressData.email.trim()) || '',
-                phone: addressData.phone,
-                addressLine1: addressData.street,
-                city: addressData.city,
-                state: addressData.state,
-                pincode: addressData.zipcode,
-                country: addressData.country || '',
-                isDefault: savedAddresses.length === 0, // Set as default if first address
-              },
+            const cr = await axios.post(
+              url + "/api/payment/razorpay/create-order",
+              { orderId: response.data.orderId },
               { headers: { token } }
             );
-            // Refresh addresses after saving
-            await loadSavedAddresses();
-          } catch (addrError) {
-            console.error("Error saving address:", addrError);
-            // Don't show error to user, address saving is optional
+            if (!cr.data.success) {
+              toast.error(cr.data.message || "Could not start Razorpay checkout");
+              return;
+            }
+            const checkoutMeta = extractRetryAttemptsMeta(cr.data.checkoutRetry);
+            if (checkoutMeta) {
+              setRazorpayRetryMeta(checkoutMeta);
+            }
+            const {
+              keyId,
+              razorpayOrderId,
+              amountPaise,
+              orderNumber: placedOrderNumber,
+            } = cr.data;
+            await loadRazorpayScript();
+            const options = {
+              key: keyId,
+              amount: amountPaise,
+              currency: "INR",
+              name: "Food delivery",
+              description: placedOrderNumber
+                ? `Order ${placedOrderNumber}`
+                : "Food order",
+              order_id: razorpayOrderId,
+              handler: async (rzResponse) => {
+                try {
+                  await axios.post(
+                    url + "/api/payment/razorpay/verify",
+                    {
+                      orderId: response.data.orderId,
+                      razorpay_order_id: rzResponse.razorpay_order_id,
+                      razorpay_payment_id: rzResponse.razorpay_payment_id,
+                      razorpay_signature: rzResponse.razorpay_signature,
+                    },
+                    { headers: { token } }
+                  );
+                  toast.success("Payment successful!");
+                  setRazorpayRetryMeta(null);
+                  navigate("/myorders");
+                } catch (verErr) {
+                  toast.error(
+                    verErr.response?.data?.message || "Payment verification failed"
+                  );
+                }
+              },
+              modal: {
+                ondismiss: () => {
+                  toast.info("Payment window closed — your order is unpaid until you pay.");
+                },
+              },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.on("payment.failed", (ev) => {
+              toast.error(
+                ev?.error?.description || ev?.error?.reason || "Payment failed"
+              );
+            });
+            rzp.open();
+          } catch (rzErr) {
+            console.error("Razorpay checkout error:", rzErr);
+            const retryMeta = extractRetryAttemptsMeta(rzErr.response?.data);
+            if (retryMeta) {
+              setRazorpayRetryMeta(retryMeta);
+            }
+            const retryMsg = buildRazorpayRetryMessage(rzErr.response?.data);
+            if (rzErr.response?.status === 429 && retryMsg) {
+              toast.info(retryMsg);
+              return;
+            }
+            toast.error(
+              rzErr.response?.data?.message ||
+                "Could not open Razorpay. Check server keys (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)."
+            );
           }
+          return;
         }
-        
+
+        toast.success("Order placed successfully!");
+        await afterOrderPlaced();
         navigate("/myorders");
       } else {
         toast.error("Error placing order!");
@@ -400,6 +722,17 @@ const PlaceOrder = () => {
   };
 
   useEffect(() => {
+    axios
+      .get(`${url}/api/order/checkout-hints`)
+      .then((res) => {
+        if (res.data?.success && res.data?.data) {
+          setCheckoutHints(res.data.data);
+        }
+      })
+      .catch(() => {});
+  }, [url]);
+
+  useEffect(() => {
     if (!token) {
       toast.error("Please Login first");
       navigate("/cart");
@@ -419,6 +752,8 @@ const PlaceOrder = () => {
       fetchAvailableCoupons();
     }
   }, [paymentMethod, getTotalCartAmount()]);
+
+  const checkoutCtaLabel = checkoutCtaVariant === "treatment" ? "SECURE CHECKOUT" : "PLACE ORDER";
 
   // Fetch active offers
   const fetchActiveOffers = async () => {
@@ -507,6 +842,36 @@ const PlaceOrder = () => {
   };
 
   const totals = calculateTotal();
+  const netItemsAfterDiscount = Math.max(0, totals.subtotal - totals.discount);
+  const serviceFeePercent = Number(checkoutHints?.serviceFeePercent) || 0;
+  const serviceFeeMaxInr = Number(checkoutHints?.serviceFeeMaxInr);
+  const serviceFeeCap = Number.isFinite(serviceFeeMaxInr) ? serviceFeeMaxInr : 50;
+  const estimatedServiceFee =
+    serviceFeePercent > 0
+      ? Math.min(
+          serviceFeeCap,
+          Math.round((netItemsAfterDiscount * serviceFeePercent) / 100 * 100) / 100
+        )
+      : 0;
+  const tipMaxFixed = Number(checkoutHints?.tipMaxFixedInr);
+  const tipPctCap = Number(checkoutHints?.tipMaxPercentOfSubtotal);
+  const tipMaxByPct =
+    Number.isFinite(tipPctCap) && tipPctCap > 0
+      ? Math.round(totals.subtotal * (tipPctCap / 100) * 100) / 100
+      : Math.round(totals.subtotal * 0.25 * 100) / 100;
+  const tipAllowedMax = Math.min(
+    Number.isFinite(tipMaxFixed) ? tipMaxFixed : 500,
+    tipMaxByPct
+  );
+  const tipParsedDisplay = parseFloat(String(tipAmountInput || "").trim());
+  const tipAmountNum =
+    Number.isFinite(tipParsedDisplay) && tipParsedDisplay > 0
+      ? Math.round(tipParsedDisplay * 100) / 100
+      : 0;
+  const grandTotalWithExtras = Math.max(
+    0,
+    totals.total + estimatedServiceFee + tipAmountNum
+  );
 
   return (
     <form className="place-order" onSubmit={placeOrder}>
@@ -707,6 +1072,76 @@ const PlaceOrder = () => {
             })()}
           </div>
         )}
+
+        <div className="schedule-section">
+          <p className="form-section-title">Delivery Time</p>
+          <div className="schedule-mode-options">
+            <label className={`schedule-mode-option ${deliveryMode === "asap" ? "selected" : ""}`}>
+              <input
+                type="radio"
+                name="deliveryMode"
+                value="asap"
+                checked={deliveryMode === "asap"}
+                onChange={() => setDeliveryMode("asap")}
+              />
+              <span>As soon as possible</span>
+            </label>
+            <label className={`schedule-mode-option ${deliveryMode === "scheduled" ? "selected" : ""}`}>
+              <input
+                type="radio"
+                name="deliveryMode"
+                value="scheduled"
+                checked={deliveryMode === "scheduled"}
+                onChange={() => setDeliveryMode("scheduled")}
+              />
+              <span>Schedule for later</span>
+            </label>
+          </div>
+
+          {deliveryMode === "scheduled" && (
+            <div className="schedule-picker-grid">
+              <div>
+                <label htmlFor="scheduledDate">Date</label>
+                <select
+                  id="scheduledDate"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                >
+                  {scheduleDateOptions.map((dateValue) => (
+                    <option key={dateValue} value={dateValue}>
+                      {buildDateLabel(dateValue)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="scheduledSlotId">Time slot</label>
+                <select
+                  id="scheduledSlotId"
+                  value={selectedScheduledSlotId}
+                  onChange={(e) => setSelectedScheduledSlotId(e.target.value)}
+                  disabled={!availableScheduleSlots.length}
+                >
+                  {availableScheduleSlots.length === 0 ? (
+                    <option value="">No slots available</option>
+                  ) : (
+                    availableScheduleSlots.map((slot) => (
+                      <option key={slot.id} value={slot.id}>
+                        {slot.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+              {selectedScheduleSlot && (
+                <p className="schedule-selection-preview">
+                  Scheduled for {buildDateLabel(selectedScheduleSlot.date)} at{" "}
+                  {selectedScheduleSlot.startTime} - {selectedScheduleSlot.endTime}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div className="place-order-right">
         <div className="cart-total">
@@ -815,11 +1250,40 @@ const PlaceOrder = () => {
                 </div>
               </>
             )}
+
+            {estimatedServiceFee > 0 && (
+              <>
+                <hr />
+                <div className="cart-total-details">
+                  <p>Service fee</p>
+                  <p>{formatCurrency(estimatedServiceFee)}</p>
+                </div>
+              </>
+            )}
+
+            <hr />
+            <div className="checkout-tip-row">
+              <label htmlFor="tipAmount">Tip (optional)</label>
+              <input
+                id="tipAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                value={tipAmountInput}
+                onChange={(e) => setTipAmountInput(e.target.value)}
+              />
+              {checkoutHints ? (
+                <small className="checkout-tip-hint">
+                  Max {formatCurrency(tipAllowedMax)} for this order
+                </small>
+              ) : null}
+            </div>
             
             <hr />
             <div className="cart-total-details">
               <b>Total</b>
-              <b>{formatCurrency(totals.total)}</b>
+              <b>{formatCurrency(grandTotalWithExtras)}</b>
             </div>
           </div>
 
@@ -983,6 +1447,23 @@ const PlaceOrder = () => {
                 />
                 <span>👛 Wallet (Paytm, PhonePe, etc.)</span>
               </label>
+
+              <label className={`payment-option ${paymentMethod === "razorpay" ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="razorpay"
+                  checked={paymentMethod === "razorpay"}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                />
+                <span>Razorpay (card, UPI, netbanking)</span>
+              </label>
+              {paymentMethod === "razorpay" && razorpayRetryMeta ? (
+                <p className="payment-retry-meta" role="status">
+                  Attempts left this hour: {razorpayRetryMeta.attemptsLeft}/
+                  {razorpayRetryMeta.maxAttempts}
+                </p>
+              ) : null}
             </div>
 
             {/* Payment Details Input */}
@@ -1049,7 +1530,7 @@ const PlaceOrder = () => {
             )}
           </div>
 
-          <button type="submit">PLACE ORDER</button>
+          <button type="submit">{checkoutCtaLabel}</button>
         </div>
       </div>
 

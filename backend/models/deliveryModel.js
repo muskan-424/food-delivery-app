@@ -17,6 +17,8 @@ const deliveryPersonSchema = new mongoose.Schema({
   },
   totalDeliveries: { type: Number, default: 0 },
   rating: { type: Number, default: 0, min: 0, max: 5 },
+  /** Optional link to a User with role `driver` for unified auth (Phase 5) */
+  linkedUserId: { type: mongoose.Schema.Types.ObjectId, ref: "user", default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -45,7 +47,28 @@ const deliveryAssignmentSchema = new mongoose.Schema({
       lat: { type: Number },
       lng: { type: Number }
     }
-  }
+  },
+  /** Handoff OTP (bcrypt); customer tells driver to complete delivery */
+  otpHash: { type: String, default: "" },
+  otpExpiresAt: { type: Date },
+  otpNotification: {
+    channel: { type: String, enum: ["none", "sms"], default: "none" },
+    provider: { type: String, default: "" },
+    status: { type: String, enum: ["pending", "sent", "failed", "skipped"], default: "skipped" },
+    sentAt: { type: Date, default: null },
+    messageId: { type: String, default: "" },
+    reason: { type: String, default: "" },
+  },
+  /** Phase 5 batching: optional multi-stop route group */
+  batchId: { type: String, default: "", index: true },
+  batchSequence: { type: Number, default: null },
+  batchGroupedAt: { type: Date, default: null },
+  rejectionReason: { type: String, default: "" },
+  /** Phase 9: pending POD media uploaded directly to object storage */
+  pendingPodEvidence: {
+    key: { type: String, default: "" },
+    uploadedAt: { type: Date, default: null },
+  },
 });
 
 deliveryAssignmentSchema.index({ orderId: 1 });

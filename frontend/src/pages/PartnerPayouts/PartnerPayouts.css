@@ -1,0 +1,39 @@
+.partner-payouts-page {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.partner-payouts-note {
+  color: #555;
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.partner-payouts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.partner-payouts-table th,
+.partner-payouts-table td {
+  border: 1px solid #e0e0e0;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.partner-payouts-table button {
+  margin-right: 0.35rem;
+}
+
+.partner-payouts-detail {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f8f8f8;
+  border-radius: 8px;
+}
+
+.partner-payouts-detail ul {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.25rem;
+}

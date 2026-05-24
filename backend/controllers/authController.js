@@ -12,6 +12,7 @@ import bcrypt from "bcrypt";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 import { send2FASetupEmail } from "../utils/emailService.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Request password reset
 const requestPasswordReset = async (req, res) => {
@@ -23,7 +24,7 @@ const requestPasswordReset = async (req, res) => {
     const user = await userModel.findOne({ email });
     if (!user) {
       // Don't reveal if email exists (security best practice)
-      return res.status(200).json({ 
+      return sendSuccess(res, req, 200, { 
         success: true, 
         message: "If the email exists, a password reset link has been sent." 
       });
@@ -46,13 +47,13 @@ const requestPasswordReset = async (req, res) => {
     // Send reset email
     await sendPasswordResetEmail(user.email, resetToken);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "If the email exists, a password reset link has been sent." 
     });
   } catch (error) {
     console.error("Password reset error:", error);
-    res.status(500).json({ success: false, message: "Error processing password reset request" });
+    sendError(res, req, 500, "Error processing password reset request");
   }
 };
 
@@ -62,16 +63,14 @@ const resetPassword = async (req, res) => {
   
   try {
     if (!token || !newPassword) {
-      return res.status(400).json({ success: false, message: "Token and new password are required" });
+      return sendError(res, req, 400, "Token and new password are required");
     }
 
     // Validate password strength
     const passwordValidation = validatePasswordStrength(newPassword);
     if (!passwordValidation.isValid) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Password does not meet requirements",
-        errors: passwordValidation.errors
+      return sendError(res, req, 400, "Password does not meet requirements", {
+        errors: passwordValidation.errors,
       });
     }
 
@@ -84,13 +83,13 @@ const resetPassword = async (req, res) => {
     });
 
     if (!resetTokenRecord) {
-      return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
+      return sendError(res, req, 400, "Invalid or expired reset token");
     }
 
     // Get user
     const user = await userModel.findById(resetTokenRecord.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Hash new password
@@ -110,10 +109,10 @@ const resetPassword = async (req, res) => {
     // Revoke all existing sessions (force re-login)
     await revokeAllUserTokens(user._id);
 
-    res.status(200).json({ success: true, message: "Password reset successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Password reset successfully" });
   } catch (error) {
     console.error("Password reset error:", error);
-    res.status(500).json({ success: false, message: "Error resetting password" });
+    sendError(res, req, 500, "Error resetting password");
   }
 };
 
@@ -125,7 +124,7 @@ const generateCSRFToken = async (req, res) => {
   
   try {
     if (!userId) {
-      return res.status(401).json({ success: false, message: "Authentication required" });
+      return sendError(res, req, 401, "Authentication required");
     }
 
     // Generate CSRF token
@@ -142,14 +141,14 @@ const generateCSRFToken = async (req, res) => {
       userAgent
     });
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       csrfToken,
       expiresAt 
     });
   } catch (error) {
     console.error("CSRF token generation error:", error);
-    res.status(500).json({ success: false, message: "Error generating CSRF token" });
+    sendError(res, req, 500, "Error generating CSRF token");
   }
 };
 
@@ -160,7 +159,7 @@ const setup2FA = async (req, res) => {
   try {
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Generate secret
@@ -180,7 +179,7 @@ const setup2FA = async (req, res) => {
     // Generate QR code
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
-    res.status(200).json({
+    sendSuccess(res, req, 200, {
       success: true,
       secret: secret.base32,
       qrCode: qrCodeUrl,
@@ -189,7 +188,7 @@ const setup2FA = async (req, res) => {
     });
   } catch (error) {
     console.error("2FA setup error:", error);
-    res.status(500).json({ success: false, message: "Error setting up 2FA" });
+    sendError(res, req, 500, "Error setting up 2FA");
   }
 };
 
@@ -201,7 +200,7 @@ const verify2FA = async (req, res) => {
   try {
     const user = await userModel.findById(userId);
     if (!user || !user.twoFactorSecret) {
-      return res.status(400).json({ success: false, message: "2FA setup not initiated" });
+      return sendError(res, req, 400, "2FA setup not initiated");
     }
 
     // Verify code
@@ -213,7 +212,7 @@ const verify2FA = async (req, res) => {
     });
 
     if (!verified) {
-      return res.status(400).json({ success: false, message: "Invalid verification code" });
+      return sendError(res, req, 400, "Invalid verification code");
     }
 
     // Enable 2FA
@@ -223,14 +222,14 @@ const verify2FA = async (req, res) => {
     // Send backup codes email
     await send2FASetupEmail(user.email, user.twoFactorBackupCodes);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Two-factor authentication enabled successfully",
       backupCodes: user.twoFactorBackupCodes
     });
   } catch (error) {
     console.error("2FA verification error:", error);
-    res.status(500).json({ success: false, message: "Error verifying 2FA" });
+    sendError(res, req, 500, "Error verifying 2FA");
   }
 };
 
@@ -242,13 +241,13 @@ const disable2FA = async (req, res) => {
   try {
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid password" });
+      return sendError(res, req, 401, "Invalid password");
     }
 
     // Disable 2FA
@@ -257,10 +256,10 @@ const disable2FA = async (req, res) => {
     user.twoFactorBackupCodes = [];
     await user.save();
 
-    res.status(200).json({ success: true, message: "Two-factor authentication disabled" });
+    sendSuccess(res, req, 200, { success: true, message: "Two-factor authentication disabled" });
   } catch (error) {
     console.error("2FA disable error:", error);
-    res.status(500).json({ success: false, message: "Error disabling 2FA" });
+    sendError(res, req, 500, "Error disabling 2FA");
   }
 };
 
@@ -275,36 +274,36 @@ const createAdmin = async (req, res) => {
     // Check if current user is admin
     const currentUser = await userModel.findById(currentUserId);
     if (!currentUser || currentUser.role !== 'admin') {
-      return res.status(403).json({ success: false, message: "Only admins can create new admins" });
+      return sendError(res, req, 403, "Only admins can create new admins");
     }
 
     // Check current admin count
     const adminCount = await userModel.countDocuments({ role: 'admin' });
     if (adminCount >= 2) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Maximum limit of 2 admins reached. Cannot create more admin accounts." 
-      });
+      return sendError(
+        res,
+        req,
+        400,
+        "Maximum limit of 2 admins reached. Cannot create more admin accounts."
+      );
     }
 
     // Validate input
     if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: "Name, email, and password are required" });
+      return sendError(res, req, 400, "Name, email, and password are required");
     }
 
     // Check if user already exists
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ success: false, message: "User with this email already exists" });
+      return sendError(res, req, 409, "User with this email already exists");
     }
 
     // Validate password strength
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.isValid) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Password does not meet requirements",
-        errors: passwordValidation.errors
+      return sendError(res, req, 400, "Password does not meet requirements", {
+        errors: passwordValidation.errors,
       });
     }
 
@@ -329,7 +328,7 @@ const createAdmin = async (req, res) => {
     // Log admin creation activity
     console.log(`New admin created: ${email} by ${currentUser.email} from IP: ${ipAddress}`);
 
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       message: `Admin account created successfully for ${email}`,
       adminCount: adminCount + 1,
@@ -337,7 +336,7 @@ const createAdmin = async (req, res) => {
     });
   } catch (error) {
     console.error("Admin creation error:", error);
-    res.status(500).json({ success: false, message: "Error creating admin account" });
+    sendError(res, req, 500, "Error creating admin account");
   }
 };
 
@@ -349,7 +348,7 @@ const getAdminInfo = async (req, res) => {
     // Check if current user is admin
     const currentUser = await userModel.findById(currentUserId);
     if (!currentUser || currentUser.role !== 'admin') {
-      return res.status(403).json({ success: false, message: "Access denied" });
+      return sendError(res, req, 403, "Access denied");
     }
 
     // Get admin count and list
@@ -360,7 +359,7 @@ const getAdminInfo = async (req, res) => {
     const adminCount = admins.length;
     const canCreateMore = adminCount < 2;
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       adminCount,
       maxAdmins: 2,
@@ -377,7 +376,7 @@ const getAdminInfo = async (req, res) => {
     });
   } catch (error) {
     console.error("Get admin info error:", error);
-    res.status(500).json({ success: false, message: "Error fetching admin information" });
+    sendError(res, req, 500, "Error fetching admin information");
   }
 };
 

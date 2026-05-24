@@ -28,7 +28,6 @@ const Profile = () => {
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchProfile = async () => {
@@ -87,28 +86,35 @@ const Profile = () => {
   const handlePictureUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append("profilePicture", file);
     try {
       setUploadingPicture(true);
-      const response = await axios.post(
-        `${url}/api/profile/picture`,
-        formData,
-        {
-          headers: {
-            token,
-            "Content-Type": "multipart/form-data",
-          },
-        }
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const contentType = file.type || "image/jpeg";
+      const uploadMeta = await axios.post(
+        `${url}/api/profile/picture/upload-url`,
+        { ext, contentType },
+        { headers: { token } }
       );
-      if (response.data.success) {
+      if (!uploadMeta.data?.success) {
+        toast.error(uploadMeta.data?.message || "Failed to create upload URL");
+        return;
+      }
+      const { uploadUrl, key } = uploadMeta.data.data || {};
+      await axios.put(uploadUrl, file, { headers: { "Content-Type": contentType } });
+      const response = await axios.post(
+        `${url}/api/profile/picture/finalize`,
+        { key },
+        { headers: { token } }
+      );
+      if (response.data?.success) {
         toast.success("Profile picture updated");
         setProfile((prev) => ({
           ...prev,
           profilePicture: response.data.data.profilePicture,
+          profilePictureUrl: response.data.data.profilePictureUrl,
         }));
       } else {
-        toast.error(response.data.message || "Failed to upload picture");
+        toast.error(response.data?.message || "Failed to finalize uploaded picture");
       }
     } catch (error) {
       console.error("Upload error:", error);
@@ -214,10 +220,10 @@ const Profile = () => {
   };
 
   const getAvatarUrl = () => {
+    if (profile?.profilePictureUrl) return profile.profilePictureUrl;
     if (!profile?.profilePicture) return null;
-    return profile.profilePicture.startsWith("http")
-      ? profile.profilePicture
-      : `${url}/images/${profile.profilePicture}`;
+    if (profile.profilePicture.startsWith("http")) return profile.profilePicture;
+    return `${url}/images/${profile.profilePicture}`;
   };
 
   if (!token) {

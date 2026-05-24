@@ -14,6 +14,8 @@ import CustomerService from "./pages/CustomerService/CustomerService";
 import SupportAgents from "./pages/SupportAgents/SupportAgents";
 import UserManagement from "./pages/UserManagement/UserManagement";
 import CreateAdmin from "./pages/CreateAdmin/CreateAdmin";
+import Payouts from "./pages/Payouts/Payouts";
+import Disputes from "./pages/Disputes/Disputes";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Login from "./components/Login/Login";
@@ -74,6 +76,16 @@ const App = () => {
             <Route path="/payments" element={
               <ProtectedRoute>
                 <Payments url={url}/>
+              </ProtectedRoute>
+            } />
+            <Route path="/payouts" element={
+              <ProtectedRoute>
+                <Payouts url={url}/>
+              </ProtectedRoute>
+            } />
+            <Route path="/disputes" element={
+              <ProtectedRoute>
+                <Disputes url={url}/>
               </ProtectedRoute>
             } />
             <Route path="/offers" element={

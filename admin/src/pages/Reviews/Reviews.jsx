@@ -61,7 +61,6 @@ const Reviews = ({ url }) => {
 
   useEffect(() => {
     fetchReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, filters, pagination.page]);
 
   const handleFilterChange = (key, value) => {
@@ -150,6 +149,18 @@ const Reviews = ({ url }) => {
       hour: "2-digit",
       minute: "2-digit"
     });
+  };
+
+  const resolveAvatarUrl = (review) => {
+    const avatarSource =
+      review.userAvatarUrl ||
+      review.userId?.profilePictureUrl ||
+      review.userAvatar ||
+      review.userId?.profilePicture ||
+      "";
+    if (!avatarSource) return "";
+    if (avatarSource.startsWith("http")) return avatarSource;
+    return `${url}/images/${avatarSource}`;
   };
 
   if (loading && reviews.length === 0) {
@@ -251,14 +262,10 @@ const Reviews = ({ url }) => {
               <div key={review._id} className="review-card">
                 <div className="review-header">
                   <div className="review-user-info">
-                    <div className={`user-avatar ${(review.userAvatar || review.userId?.profilePicture) ? "has-image" : "placeholder"}`}>
-                      {review.userAvatar || review.userId?.profilePicture ? (
+                    <div className={`user-avatar ${(review.userAvatarUrl || review.userId?.profilePictureUrl || review.userAvatar || review.userId?.profilePicture) ? "has-image" : "placeholder"}`}>
+                      {review.userAvatarUrl || review.userId?.profilePictureUrl || review.userAvatar || review.userId?.profilePicture ? (
                         <img
-                          src={
-                            (review.userAvatar || review.userId?.profilePicture || "").startsWith("http")
-                              ? (review.userAvatar || review.userId?.profilePicture)
-                              : `${url}/images/${review.userAvatar || review.userId?.profilePicture}`
-                          }
+                          src={resolveAvatarUrl(review)}
                           alt={review.userName || review.userId?.name || "User"}
                         />
                       ) : (

@@ -9,7 +9,11 @@ export const createAccessToken = (userId) => {
 
 // Create refresh token (long-lived)
 export const createRefreshToken = (userId) => {
-  return jwt.sign({ id: userId, type: 'refresh' }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(
+    { id: userId, type: "refresh", jti: crypto.randomUUID() },
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 };
 
 // Verify access token

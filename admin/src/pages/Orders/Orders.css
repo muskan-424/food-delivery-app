@@ -9,6 +9,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
     font-weight: 600;
 }
 
@@ -16,6 +17,19 @@
     padding: 8px 12px;
     border-radius: 6px;
     border: 1px solid #ccc;
+}
+
+.order-filters input[type="date"]{
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+
+.due-only-filter{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
 }
 
 .no-orders{
@@ -44,6 +58,36 @@
 }
 .order-item-address{
     margin-bottom: 10px;
+}
+
+.order-item-schedule{
+    margin: 8px 0;
+    font-size: 13px;
+    color: #455a64;
+}
+
+.order-schedule-badge{
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+}
+
+.order-schedule-badge.scheduled{
+    background: #e8f0ff;
+    color: #0d47a1;
+}
+
+.order-schedule-badge.due{
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.order-schedule-badge.asap{
+    background: #eceff1;
+    color: #37474f;
 }
 .order-item select{
     background-color: #ffe8e4;

@@ -7,7 +7,7 @@ import { toast } from "react-toastify";
 import { assets } from "../../assets/frontend_assets/assets";
 
 const Wishlist = () => {
-  const { wishlistItems, token, url, fetchWishlist } = useContext(StoreContext);
+  const { wishlistItems, token, fetchWishlist } = useContext(StoreContext);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -17,16 +17,7 @@ const Wishlist = () => {
       return;
     }
     fetchWishlist();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-
-  const getImageUrl = (image) => {
-    if (!image) {
-      return "https://via.placeholder.com/300x200?text=No+Image";
-    }
-    const imagePath = image.startsWith('http') ? image : `${url}/images/${image}`;
-    return imagePath;
-  };
 
   if (!token) {
     return null;

@@ -1,72 +1,111 @@
-import userModel from "../models/userModel.js";
-import orderModel from "../models/orderModel.js";
-// Note: For production, use proper email/SMS services like Nodemailer, Twilio, etc.
+import {
+  listNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  countUnread,
+} from "../services/notificationService.js";
+import { registerSseClient } from "../realtime/sseHub.js";
+import { appConfig } from "../config/appConfig.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
-// Send order confirmation notification
-const sendOrderConfirmation = async (orderId) => {
+const getInbox = async (req, res) => {
   try {
-    const order = await orderModel.findById(orderId).populate('userId', 'email name phone');
-    if (!order) return;
-
-    const user = order.userId;
-    
-    // In production, send actual email/SMS
-    console.log(`Order Confirmation - Order #${order.orderNumber} placed for ${user.email}`);
-    
-    // Email notification (implement with Nodemailer)
-    // await sendEmail(user.email, 'Order Confirmed', `Your order #${order.orderNumber} has been confirmed`);
-    
-    // SMS notification (implement with Twilio)
-    // if (user.phone) {
-    //   await sendSMS(user.phone, `Your order #${order.orderNumber} has been confirmed`);
-    // }
+    const userId = req.body.userId;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const result = await listNotifications(userId, { page, limit });
+    const unread = await countUnread(userId);
+    sendSuccess(res, req, 200, { success: true, unreadCount: unread, ...result });
   } catch (error) {
-    console.error('Error sending order confirmation:', error);
+    console.error("getInbox:", error);
+    sendError(res, req, 500, "Error loading notifications");
   }
 };
 
-// Send order status update notification
-const sendOrderStatusUpdate = async (orderId, status) => {
+const patchRead = async (req, res) => {
   try {
-    const order = await orderModel.findById(orderId).populate('userId', 'email name phone');
-    if (!order) return;
-
-    const user = order.userId;
-    const statusMessages = {
-      'confirmed': 'Your order has been confirmed',
-      'preparing': 'Your order is being prepared',
-      'ready': 'Your order is ready',
-      'out_for_delivery': 'Your order is out for delivery',
-      'delivered': 'Your order has been delivered'
-    };
-
-    const message = statusMessages[status] || `Your order status has been updated to ${status}`;
-    
-    console.log(`Order Status Update - Order #${order.orderNumber}: ${message} to ${user.email}`);
-    
-    // In production, send actual notifications
-    // await sendEmail(user.email, 'Order Status Update', message);
-    // if (user.phone) await sendSMS(user.phone, message);
+    const userId = req.body.userId;
+    const { notificationId } = req.params;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+    const ok = await markNotificationRead(userId, notificationId);
+    if (!ok) {
+      return sendError(res, req, 404, "Notification not found");
+    }
+    sendSuccess(res, req, 200, { success: true, message: "Marked as read" });
   } catch (error) {
-    console.error('Error sending status update:', error);
+    console.error("patchRead:", error);
+    sendError(res, req, 500, "Error updating notification");
   }
 };
 
-// Send delivery assigned notification
-const sendDeliveryAssigned = async (orderId) => {
+const postReadAll = async (req, res) => {
   try {
-    const order = await orderModel.findById(orderId).populate('userId', 'email name phone');
-    if (!order) return;
-
-    const user = order.userId;
-    console.log(`Delivery Assigned - Order #${order.orderNumber} assigned to delivery person`);
-    
-    // In production, send actual notifications
-    // await sendEmail(user.email, 'Delivery Assigned', `Your order #${order.orderNumber} has been assigned to a delivery person`);
+    const userId = req.body.userId;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+    await markAllNotificationsRead(userId);
+    sendSuccess(res, req, 200, { success: true, message: "All notifications marked read" });
   } catch (error) {
-    console.error('Error sending delivery assigned notification:', error);
+    console.error("postReadAll:", error);
+    sendError(res, req, 500, "Error updating notifications");
   }
 };
 
-export { sendOrderConfirmation, sendOrderStatusUpdate, sendDeliveryAssigned };
+const streamSse = (req, res) => {
+  const userId = req.userId;
 
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const reg = registerSseClient(userId, res);
+  if (!reg.ok) {
+    return sendError(res, req, 429, "Too many live notification streams", {
+      data: { reason: reg.reason },
+    });
+  }
+  const { unregister } = reg;
+  res.write(
+    `data: ${JSON.stringify({ type: "connected", userId, at: new Date().toISOString() })}\n\n`
+  );
+
+  let lastWriteAt = Date.now();
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+      lastWriteAt = Date.now();
+    } catch {
+      clearInterval(heartbeat);
+      clearInterval(idleTimer);
+      unregister();
+    }
+  }, appConfig.sseHeartbeatIntervalMs);
+
+  const idleTimer = setInterval(() => {
+    if (Date.now() - lastWriteAt > appConfig.sseIdleTimeoutMs) {
+      clearInterval(heartbeat);
+      clearInterval(idleTimer);
+      unregister();
+      try {
+        res.end();
+      } catch {
+        // ignore close errors
+      }
+    }
+  }, Math.min(appConfig.sseHeartbeatIntervalMs, 30000));
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    clearInterval(idleTimer);
+    unregister();
+  });
+};
+
+export { getInbox, patchRead, postReadAll, streamSse };

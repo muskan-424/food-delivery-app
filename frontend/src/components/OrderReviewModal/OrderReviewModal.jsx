@@ -2,7 +2,6 @@ import React, { useState, useEffect, useContext } from "react";
 import "./OrderReviewModal.css";
 import { StoreContext } from "../../context/StoreContext";
 import axios from "axios";
-import { toast } from "react-toastify";
 import ReviewModal from "../ReviewModal/ReviewModal";
 import { formatCurrency } from "../../utils/currency";
 
@@ -14,7 +13,6 @@ const OrderReviewModal = ({ orderId, orderItems, onClose, onSuccess }) => {
 
   useEffect(() => {
     fetchOrderReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
   const fetchOrderReviews = async () => {
@@ -73,6 +71,13 @@ const OrderReviewModal = ({ orderId, orderItems, onClose, onSuccess }) => {
     return review?.rating || 0;
   };
 
+  const resolveItemImage = (item) => {
+    if (item?.imageUrl) return item.imageUrl;
+    if (!item?.image) return "";
+    if (String(item.image).startsWith("http")) return item.image;
+    return `${url}/images/${item.image}`;
+  };
+
   if (loading) {
     return (
       <div className="order-review-modal-overlay" onClick={onClose}>
@@ -118,9 +123,9 @@ const OrderReviewModal = ({ orderId, orderItems, onClose, onSuccess }) => {
                 <div key={item.foodId || item.id || index} className="order-item-review-card">
                   <div className="item-info">
                     <div className="item-image">
-                      {item.image ? (
+                      {item.image || item.imageUrl ? (
                         <img 
-                          src={item.image.startsWith('http') ? item.image : `${url}/images/${item.image}`}
+                          src={resolveItemImage(item)}
                           alt={item.name}
                           onError={(e) => {
                             e.target.src = "https://via.placeholder.com/80x80?text=No+Image";

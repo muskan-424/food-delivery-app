@@ -1,5 +1,6 @@
 import userModel from "../models/userModel.js";
 import foodModel from "../models/foodModel.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Get wishlist
 const getWishlist = async (req, res) => {
@@ -9,19 +10,19 @@ const getWishlist = async (req, res) => {
       model: 'food'
     });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Filter out null items (in case food was deleted)
     const validWishlist = (user.wishlist || []).filter(item => item !== null);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       data: validWishlist
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching wishlist" });
+    sendError(res, req, 500, "Error fetching wishlist");
   }
 };
 
@@ -31,36 +32,36 @@ const addToWishlist = async (req, res) => {
     const { foodId } = req.body;
 
     if (!foodId) {
-      return res.status(400).json({ success: false, message: "Food ID is required" });
+      return sendError(res, req, 400, "Food ID is required");
     }
 
     // Verify food exists
     const food = await foodModel.findById(foodId);
     if (!food) {
-      return res.status(404).json({ success: false, message: "Food item not found" });
+      return sendError(res, req, 404, "Food item not found");
     }
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Check if already in wishlist
     if (user.wishlist.includes(foodId)) {
-      return res.status(409).json({ success: false, message: "Item already in wishlist" });
+      return sendError(res, req, 409, "Item already in wishlist");
     }
 
     user.wishlist.push(foodId);
     await user.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Item added to wishlist",
       data: { foodId }
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error adding to wishlist" });
+    sendError(res, req, 500, "Error adding to wishlist");
   }
 };
 
@@ -71,24 +72,24 @@ const removeFromWishlist = async (req, res) => {
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const index = user.wishlist.indexOf(foodId);
     if (index === -1) {
-      return res.status(404).json({ success: false, message: "Item not in wishlist" });
+      return sendError(res, req, 404, "Item not in wishlist");
     }
 
     user.wishlist.splice(index, 1);
     await user.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Item removed from wishlist"
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error removing from wishlist" });
+    sendError(res, req, 500, "Error removing from wishlist");
   }
 };
 
@@ -99,18 +100,18 @@ const checkWishlist = async (req, res) => {
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const isInWishlist = user.wishlist.includes(foodId);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       data: { isInWishlist }
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error checking wishlist" });
+    sendError(res, req, 500, "Error checking wishlist");
   }
 };
 

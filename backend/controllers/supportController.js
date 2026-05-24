@@ -1,6 +1,8 @@
 import SupportTicket from "../models/supportTicketModel.js";
 import SupportAgent from "../models/supportAgentModel.js";
 import userModel from "../models/userModel.js";
+import { getPaginationParams, buildPaginationMeta } from "../utils/pagination.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Helper: Auto-assign ticket to best available agent
 const autoAssignTicket = async (ticket) => {
@@ -62,16 +64,13 @@ const createTicket = async (req, res) => {
     const userId = req.body.userId;
 
     if (!subject || !message) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Subject and message are required" 
-      });
+      return sendError(res, req, 400, "Subject and message are required");
     }
 
     // Get user details
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Determine priority if not provided
@@ -103,14 +102,14 @@ const createTicket = async (req, res) => {
       await ticket.save();
     }
 
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       message: "Support ticket created successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error creating ticket:', error);
-    res.status(500).json({ success: false, message: "Error creating support ticket" });
+    sendError(res, req, 500, "Error creating support ticket");
   }
 };
 
@@ -118,37 +117,31 @@ const createTicket = async (req, res) => {
 const getMyTickets = async (req, res) => {
   try {
     const userId = req.body.userId;
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     const query = { userId };
     if (status) {
       query.status = status;
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
     const tickets = await SupportTicket.find(query)
       .populate('orderId', 'orderNumber status')
       .populate('assignedTo', 'agentName email')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limit);
 
     const total = await SupportTicket.countDocuments(query);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       data: tickets,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
+      pagination: buildPaginationMeta(total, page, limit)
     });
   } catch (error) {
     console.error('Error fetching tickets:', error);
-    res.status(500).json({ success: false, message: "Error fetching tickets" });
+    sendError(res, req, 500, "Error fetching tickets");
   }
 };
 
@@ -171,7 +164,7 @@ const getTicket = async (req, res) => {
       .populate('escalatedTo', 'agentName email');
 
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     // Mark user messages as read if viewing as agent
@@ -185,10 +178,10 @@ const getTicket = async (req, res) => {
       await ticket.save();
     }
 
-    res.status(200).json({ success: true, data: ticket });
+    sendSuccess(res, req, 200, { success: true, data: ticket });
   } catch (error) {
     console.error('Error fetching ticket:', error);
-    res.status(500).json({ success: false, message: "Error fetching ticket" });
+    sendError(res, req, 500, "Error fetching ticket");
   }
 };
 
@@ -201,20 +194,17 @@ const addMessage = async (req, res) => {
     const userRole = req.body.role;
 
     if (!message) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Message is required" 
-      });
+      return sendError(res, req, 400, "Message is required");
     }
 
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     // Check permissions
     if (userRole !== 'admin' && ticket.userId.toString() !== userId) {
-      return res.status(403).json({ success: false, message: "Unauthorized" });
+      return sendError(res, req, 403, "Unauthorized");
     }
 
     // Get sender info
@@ -227,14 +217,14 @@ const addMessage = async (req, res) => {
     // Add message
     await ticket.addMessage(userId, senderType, senderName, message.trim(), attachments || []);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Message added successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error adding message:', error);
-    res.status(500).json({ success: false, message: "Error adding message" });
+    sendError(res, req, 500, "Error adding message");
   }
 };
 
@@ -249,9 +239,8 @@ const getAllTickets = async (req, res) => {
       escalated,
       slaBreached,
       search,
-      page = 1, 
-      limit = 50 
     } = req.query;
+    const { page, limit, skip } = getPaginationParams(req.query);
 
     const query = {};
 
@@ -271,8 +260,6 @@ const getAllTickets = async (req, res) => {
       ];
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
     const tickets = await SupportTicket.find(query)
       .populate('orderId', 'orderNumber')
       .populate('assignedTo', 'agentName email department')
@@ -282,7 +269,7 @@ const getAllTickets = async (req, res) => {
         createdAt: -1 
       })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limit);
 
     const total = await SupportTicket.countDocuments(query);
 
@@ -298,20 +285,15 @@ const getAllTickets = async (req, res) => {
       slaBreached: await SupportTicket.countDocuments({ slaBreached: true })
     };
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       data: tickets,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
-      },
+      pagination: buildPaginationMeta(total, page, limit),
       statistics: stats
     });
   } catch (error) {
     console.error('Error fetching tickets:', error);
-    res.status(500).json({ success: false, message: "Error fetching tickets" });
+    sendError(res, req, 500, "Error fetching tickets");
   }
 };
 
@@ -324,7 +306,7 @@ const assignTicket = async (req, res) => {
 
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     // If unassigning
@@ -340,7 +322,7 @@ const assignTicket = async (req, res) => {
       ticket.assignedAt = null;
       ticket.status = 'open';
       await ticket.save();
-      return res.status(200).json({ 
+      return sendSuccess(res, req, 200, { 
         success: true, 
         message: "Ticket unassigned successfully",
         data: ticket
@@ -349,14 +331,11 @@ const assignTicket = async (req, res) => {
 
     const agent = await SupportAgent.findById(agentId);
     if (!agent) {
-      return res.status(404).json({ success: false, message: "Agent not found" });
+      return sendError(res, req, 404, "Agent not found");
     }
 
     if (!agent.canTakeTicket()) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Agent is not available or has reached maximum tickets" 
-      });
+      return sendError(res, req, 400, "Agent is not available or has reached maximum tickets");
     }
 
     // Unassign from previous agent if any
@@ -379,14 +358,14 @@ const assignTicket = async (req, res) => {
     await agent.save();
     await ticket.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Ticket assigned successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error assigning ticket:', error);
-    res.status(500).json({ success: false, message: "Error assigning ticket" });
+    sendError(res, req, 500, "Error assigning ticket");
   }
 };
 
@@ -398,7 +377,7 @@ const updateTicketStatus = async (req, res) => {
 
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     if (status) {
@@ -446,14 +425,14 @@ const updateTicketStatus = async (req, res) => {
 
     await ticket.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Ticket updated successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error updating ticket:', error);
-    res.status(500).json({ success: false, message: "Error updating ticket" });
+    sendError(res, req, 500, "Error updating ticket");
   }
 };
 
@@ -465,13 +444,13 @@ const escalateTicket = async (req, res) => {
 
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     if (agentId) {
       const agent = await SupportAgent.findById(agentId);
       if (!agent) {
-        return res.status(404).json({ success: false, message: "Agent not found" });
+        return sendError(res, req, 404, "Agent not found");
       }
       await ticket.escalate(agentId, reason);
     } else {
@@ -486,14 +465,14 @@ const escalateTicket = async (req, res) => {
 
     await ticket.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Ticket escalated successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error escalating ticket:', error);
-    res.status(500).json({ success: false, message: "Error escalating ticket" });
+    sendError(res, req, 500, "Error escalating ticket");
   }
 };
 
@@ -506,15 +485,12 @@ const updateTicket = async (req, res) => {
 
     const ticket = await SupportTicket.findOne({ _id: ticketId, userId });
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     // Only allow update if ticket is open or assigned
     if (ticket.status !== 'open' && ticket.status !== 'assigned') {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Can only update tickets that are open or assigned" 
-      });
+      return sendError(res, req, 400, "Can only update tickets that are open or assigned");
     }
 
     if (subject) ticket.subject = subject.trim();
@@ -523,14 +499,14 @@ const updateTicket = async (req, res) => {
 
     await ticket.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Ticket updated successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error updating ticket:', error);
-    res.status(500).json({ success: false, message: "Error updating ticket" });
+    sendError(res, req, 500, "Error updating ticket");
   }
 };
 
@@ -542,26 +518,23 @@ const deleteTicket = async (req, res) => {
 
     const ticket = await SupportTicket.findOne({ _id: ticketId, userId });
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     // Only allow delete if ticket is open or assigned
     if (ticket.status !== 'open' && ticket.status !== 'assigned') {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Can only delete tickets that are open or assigned" 
-      });
+      return sendError(res, req, 400, "Can only delete tickets that are open or assigned");
     }
 
     await SupportTicket.findByIdAndDelete(ticketId);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Ticket deleted successfully"
     });
   } catch (error) {
     console.error('Error deleting ticket:', error);
-    res.status(500).json({ success: false, message: "Error deleting ticket" });
+    sendError(res, req, 500, "Error deleting ticket");
   }
 };
 
@@ -573,22 +546,16 @@ const rateTicket = async (req, res) => {
     const userId = req.body.userId;
 
     if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Rating must be between 1 and 5" 
-      });
+      return sendError(res, req, 400, "Rating must be between 1 and 5");
     }
 
     const ticket = await SupportTicket.findOne({ _id: ticketId, userId });
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     if (ticket.status !== 'resolved' && ticket.status !== 'closed') {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Can only rate resolved or closed tickets" 
-      });
+      return sendError(res, req, 400, "Can only rate resolved or closed tickets");
     }
 
     ticket.customerRating = rating;
@@ -604,14 +571,14 @@ const rateTicket = async (req, res) => {
       }
     }
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Rating submitted successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error rating ticket:', error);
-    res.status(500).json({ success: false, message: "Error submitting rating" });
+    sendError(res, req, 500, "Error submitting rating");
   }
 };
 
@@ -623,15 +590,12 @@ const addInternalNote = async (req, res) => {
     const userId = req.body.userId;
 
     if (!note) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Note is required" 
-      });
+      return sendError(res, req, 400, "Note is required");
     }
 
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) {
-      return res.status(404).json({ success: false, message: "Ticket not found" });
+      return sendError(res, req, 404, "Ticket not found");
     }
 
     ticket.internalNotes.push({
@@ -641,14 +605,14 @@ const addInternalNote = async (req, res) => {
 
     await ticket.save();
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Note added successfully",
       data: ticket
     });
   } catch (error) {
     console.error('Error adding note:', error);
-    res.status(500).json({ success: false, message: "Error adding note" });
+    sendError(res, req, 500, "Error adding note");
   }
 };
 
@@ -690,10 +654,10 @@ const getFAQ = async (req, res) => {
       }
     ];
 
-    res.status(200).json({ success: true, data: faq });
+    sendSuccess(res, req, 200, { success: true, data: faq });
   } catch (error) {
     console.error('Error fetching FAQ:', error);
-    res.status(500).json({ success: false, message: "Error fetching FAQ" });
+    sendError(res, req, 500, "Error fetching FAQ");
   }
 };
 

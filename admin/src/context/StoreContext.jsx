@@ -75,7 +75,6 @@ const StoreContextProvider = (props) => {
       setTokenWithStorage("");
       setAdmin(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check token expiration periodically (every 5 minutes)

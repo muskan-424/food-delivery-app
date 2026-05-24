@@ -4,20 +4,29 @@ import fs from "fs";
 import path from "path";
 import bcrypt from "bcrypt";
 import validator from "validator";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import { createSignedPutUrl, getMediaPublicUrl } from "../utils/mediaStorage.js";
+import { normalizeUploadedMediaKey } from "../utils/mediaKeyValidation.js";
+
+function withProfilePictureUrl(userDoc) {
+  const data = userDoc?.toObject ? userDoc.toObject() : { ...(userDoc || {}) };
+  data.profilePictureUrl = getMediaPublicUrl(data.profilePicture);
+  return data;
+}
 
 // Get user profile
 const getProfile = async (req, res) => {
   try {
     const user = await userModel.findById(req.body.userId).select('-password');
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
     
     // User always sees their own full data (decryption handled by model hooks)
-    res.status(200).json({ success: true, data: user });
+    sendSuccess(res, req, 200, { success: true, data: withProfilePictureUrl(user) });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error fetching profile" });
+    sendError(res, req, 500, "Error fetching profile");
   }
 };
 
@@ -30,7 +39,7 @@ const updateProfile = async (req, res) => {
     if (name) updateData.name = name.trim();
     if (phone) {
       if (!validator.isMobilePhone(phone, 'any', { strictMode: false })) {
-        return res.status(400).json({ success: false, message: "Invalid phone number" });
+        return sendError(res, req, 400, "Invalid phone number");
       }
       updateData.phone = phone.trim();
     }
@@ -42,7 +51,7 @@ const updateProfile = async (req, res) => {
     ).select('-password');
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     if (updateData.name) {
@@ -52,10 +61,14 @@ const updateProfile = async (req, res) => {
       );
     }
 
-    res.status(200).json({ success: true, message: "Profile updated successfully", data: user });
+    sendSuccess(res, req, 200, {
+      success: true,
+      message: "Profile updated successfully",
+      data: withProfilePictureUrl(user)
+    });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error updating profile" });
+    sendError(res, req, 500, "Error updating profile");
   }
 };
 
@@ -63,14 +76,14 @@ const updateProfile = async (req, res) => {
 const uploadProfilePicture = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "Image file is required" });
+      return sendError(res, req, 400, "Image file is required");
     }
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
       // Delete uploaded file if user not found
       fs.unlink(`uploads/${req.file.filename}`, () => {});
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Delete old profile picture if exists
@@ -89,17 +102,20 @@ const uploadProfilePicture = async (req, res) => {
       { userAvatar: user.profilePicture }
     );
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Profile picture updated successfully",
-      data: { profilePicture: user.profilePicture }
+      data: {
+        profilePicture: user.profilePicture,
+        profilePictureUrl: getMediaPublicUrl(user.profilePicture),
+      }
     });
   } catch (error) {
     console.log(error);
     if (req.file) {
       fs.unlink(`uploads/${req.file.filename}`, () => {});
     }
-    res.status(500).json({ success: false, message: "Error uploading profile picture" });
+    sendError(res, req, 500, "Error uploading profile picture");
   }
 };
 
@@ -108,11 +124,11 @@ const deleteProfilePicture = async (req, res) => {
   try {
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     if (!user.profilePicture) {
-      return res.status(400).json({ success: false, message: "No profile picture to delete" });
+      return sendError(res, req, 400, "No profile picture to delete");
     }
 
     // Delete file from filesystem
@@ -132,14 +148,14 @@ const deleteProfilePicture = async (req, res) => {
       { $unset: { userAvatar: "" } }
     );
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Profile picture deleted successfully",
-      data: { profilePicture: '' }
+      data: { profilePicture: '', profilePictureUrl: null }
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error deleting profile picture" });
+    sendError(res, req, 500, "Error deleting profile picture");
   }
 };
 
@@ -150,18 +166,18 @@ const deleteAccount = async (req, res) => {
     const userId = req.body.userId;
 
     if (!password) {
-      return res.status(400).json({ success: false, message: "Password is required to delete account" });
+      return sendError(res, req, 400, "Password is required to delete account");
     }
 
     const user = await userModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Incorrect password" });
+      return sendError(res, req, 401, "Incorrect password");
     }
 
     // Check if user has active orders
@@ -172,10 +188,12 @@ const deleteAccount = async (req, res) => {
     });
 
     if (activeOrders > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Cannot delete account with ${activeOrders} active order(s). Please cancel or complete orders first.` 
-      });
+      return sendError(
+        res,
+        req,
+        400,
+        `Cannot delete account with ${activeOrders} active order(s). Please cancel or complete orders first.`
+      );
     }
 
     // Delete profile picture if exists
@@ -191,13 +209,13 @@ const deleteAccount = async (req, res) => {
     // Delete user account
     await userModel.findByIdAndDelete(userId);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       message: "Account deleted successfully" 
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error deleting account" });
+    sendError(res, req, 500, "Error deleting account");
   }
 };
 
@@ -207,21 +225,21 @@ const changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ success: false, message: "Current password and new password are required" });
+      return sendError(res, req, 400, "Current password and new password are required");
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, message: "New password must be at least 8 characters" });
+      return sendError(res, req, 400, "New password must be at least 8 characters");
     }
 
     const user = await userModel.findById(req.body.userId);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Current password is incorrect" });
+      return sendError(res, req, 401, "Current password is incorrect");
     }
 
     const salt = await bcrypt.genSalt(Number(process.env.SALT) || 10);
@@ -230,12 +248,181 @@ const changePassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    res.status(200).json({ success: true, message: "Password changed successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Password changed successfully" });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error changing password" });
+    sendError(res, req, 500, "Error changing password");
   }
 };
 
-export { getProfile, updateProfile, uploadProfilePicture, deleteProfilePicture, changePassword, deleteAccount };
+const listPushDevices = async (req, res) => {
+  try {
+    const user = await userModel.findById(req.body.userId).select("pushDevices");
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+    sendSuccess(res, req, 200, {
+      success: true,
+      data: (user.pushDevices || []).map((d) => ({
+        token: d.token,
+        platform: d.platform || "unknown",
+        active: d.active !== false,
+        lastSeenAt: d.lastSeenAt || null,
+      })),
+    });
+  } catch (error) {
+    console.log(error);
+    sendError(res, req, 500, "Error loading push devices");
+  }
+};
+
+const registerPushDevice = async (req, res) => {
+  try {
+    const token = String(req.body.token || "").trim();
+    const platformRaw = String(req.body.platform || "unknown").toLowerCase();
+    const platform = ["android", "ios", "web"].includes(platformRaw) ? platformRaw : "unknown";
+    if (!token || token.length < 16 || token.length > 4096) {
+      return sendError(res, req, 400, "token is required (16-4096 chars)");
+    }
+    const user = await userModel.findById(req.body.userId).select("pushDevices");
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+    const now = new Date();
+    const devices = Array.isArray(user.pushDevices) ? user.pushDevices : [];
+    const idx = devices.findIndex((d) => String(d.token) === token);
+    if (idx >= 0) {
+      devices[idx].platform = platform;
+      devices[idx].active = true;
+      devices[idx].lastSeenAt = now;
+    } else {
+      devices.push({ token, platform, active: true, lastSeenAt: now });
+    }
+    user.pushDevices = devices.slice(-20);
+    await user.save();
+    sendSuccess(res, req, 200, {
+      success: true,
+      message: "Push device registered",
+      data: { token, platform, active: true, lastSeenAt: now },
+    });
+  } catch (error) {
+    console.log(error);
+    sendError(res, req, 500, "Error registering push device");
+  }
+};
+
+// Phase 9: object-storage ready upload URL for profile picture
+const createProfilePictureUploadUrl = async (req, res) => {
+  try {
+    const extRaw = String(req.body.ext || req.query.ext || "jpg")
+      .trim()
+      .toLowerCase();
+    const safeExt = ["jpg", "jpeg", "png", "gif", "webp"].includes(extRaw) ? extRaw : "jpg";
+    const contentTypeRaw = String(req.body.contentType || req.query.contentType || "image/jpeg")
+      .trim()
+      .toLowerCase();
+    const allowedContentTypes = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ]);
+    const contentType = allowedContentTypes.has(contentTypeRaw)
+      ? contentTypeRaw
+      : "image/jpeg";
+
+    const key = `profile_${String(req.body.userId)}_${Date.now()}.${safeExt}`;
+    const uploadUrl = await createSignedPutUrl({ key, contentType });
+    if (!uploadUrl) {
+      return sendError(
+        res,
+        req,
+        400,
+        "Signed upload URL unavailable (object storage provider not configured)"
+      );
+    }
+    return sendSuccess(res, req, 200, {
+      success: true,
+      data: {
+        key,
+        uploadUrl,
+        publicUrl: getMediaPublicUrl(key),
+        contentType,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    return sendError(res, req, 500, "Error creating upload URL");
+  }
+};
+
+// Phase 9: finalize direct-uploaded profile picture key
+const finalizeProfilePictureUpload = async (req, res) => {
+  try {
+    const key = normalizeUploadedMediaKey(req.body.key);
+    if (!key) {
+      return sendError(res, req, 400, "Valid key is required");
+    }
+    const user = await userModel.findById(req.body.userId);
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+    user.profilePicture = key;
+    await user.save();
+    await reviewModel.updateMany(
+      { userId: user._id.toString() },
+      { userAvatar: user.profilePicture }
+    );
+    return sendSuccess(res, req, 200, {
+      success: true,
+      message: "Profile picture key finalized",
+      data: {
+        profilePicture: user.profilePicture,
+        profilePictureUrl: getMediaPublicUrl(user.profilePicture),
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    return sendError(res, req, 500, "Error finalizing profile picture key");
+  }
+};
+
+const unregisterPushDevice = async (req, res) => {
+  try {
+    const token = String(req.body.token || "").trim();
+    if (!token) {
+      return sendError(res, req, 400, "token is required");
+    }
+    const user = await userModel.findById(req.body.userId).select("pushDevices");
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+    const before = user.pushDevices?.length || 0;
+    user.pushDevices = (user.pushDevices || []).filter((d) => String(d.token) !== token);
+    const removed = before - (user.pushDevices?.length || 0);
+    await user.save();
+    sendSuccess(res, req, 200, {
+      success: true,
+      message: removed > 0 ? "Push device removed" : "Push device not found",
+      data: { removed },
+    });
+  } catch (error) {
+    console.log(error);
+    sendError(res, req, 500, "Error unregistering push device");
+  }
+};
+
+export {
+  getProfile,
+  updateProfile,
+  uploadProfilePicture,
+  deleteProfilePicture,
+  changePassword,
+  deleteAccount,
+  listPushDevices,
+  registerPushDevice,
+  unregisterPushDevice,
+  createProfilePictureUploadUrl,
+  finalizeProfilePictureUpload,
+};
 

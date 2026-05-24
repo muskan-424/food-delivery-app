@@ -10,7 +10,15 @@ const Navbar = ({ setShowLogin }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const searchInputRef = useRef(null);
-  const { getTotalCartAmount, token, setToken, setSearchQuery } = useContext(StoreContext);
+  const {
+    getTotalCartAmount,
+    token,
+    setToken,
+    setSearchQuery,
+    partnerPayoutAccess,
+    partnerRestaurantManageAccess,
+    partnerAccessResolved,
+  } = useContext(StoreContext);
   const navigate=useNavigate();
 
   const logout=()=>{
@@ -138,10 +146,30 @@ const Navbar = ({ setShowLogin }) => {
               <img src={assets.profile_icon} alt="" />
               <ul className="nav-profile-dropdown">
                 <li onClick={()=>navigate("/myorders")}><img src={assets.bag_icon} alt="" /><p>Orders</p></li>
+                <li onClick={() => navigate("/group-orders")}>
+                  <span className="dropdown-icon">👥</span>
+                  <p>Group orders</p>
+                </li>
+                <li onClick={() => navigate("/my-disputes")}>
+                  <span className="dropdown-icon">⚖</span>
+                  <p>My disputes</p>
+                </li>
                 <li onClick={()=>navigate("/payments")}><span className="dropdown-icon">💳</span><p>Payment History</p></li>
                 <li onClick={()=>navigate("/profile")}><img src={assets.profile_icon} alt="" /><p>Profile</p></li>
                 <li onClick={()=>navigate("/wishlist")}><span className="dropdown-icon">🤍</span><p>Wishlist</p></li>
                 <li onClick={()=>navigate("/support")}><span className="dropdown-icon">💬</span><p>Support</p></li>
+                {partnerAccessResolved && partnerPayoutAccess ? (
+                  <li onClick={() => navigate("/partner/payouts")}>
+                    <span className="dropdown-icon">📒</span>
+                    <p>Partner payouts</p>
+                  </li>
+                ) : null}
+                {partnerAccessResolved && partnerRestaurantManageAccess ? (
+                  <li onClick={() => navigate("/partner/kyc")}>
+                    <span className="dropdown-icon">🧾</span>
+                    <p>Partner KYC</p>
+                  </li>
+                ) : null}
                 <hr />
                 <li onClick={logout}><img src={assets.logout_icon} alt="" /><p>Logout</p></li>
               </ul>

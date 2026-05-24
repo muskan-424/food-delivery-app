@@ -17,6 +17,16 @@ import {
 import TokenBlacklist from "../models/tokenBlacklistModel.js";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
+import {
+  ensureReferralCodeForUser,
+  findReferrerByCode,
+} from "../services/referralService.js";
+import {
+  extendLoyaltyBalanceExpiry,
+  previewLoyaltyRedemption,
+} from "../services/loyaltyService.js";
+import { assignExperimentForUser } from "../services/abTestingService.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Login user with enhanced security
 const loginUser = async (req, res) => {
@@ -27,30 +37,32 @@ const loginUser = async (req, res) => {
   try {
     const user = await userModel.findOne({ email });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User Doesn't exist" });
+      return sendError(res, req, 404, "User Doesn't exist");
     }
 
     // Check if account is locked
     const lockStatus = isAccountLocked(user);
     if (lockStatus.locked) {
-      return res.status(423).json({ success: false, message: lockStatus.message });
+      return sendError(res, req, 423, lockStatus.message);
     }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       const attemptResult = await handleFailedLogin(user, 5, 30);
-      return res.status(401).json({ 
-        success: false, 
-        message: attemptResult.locked ? attemptResult.message : "Invalid Credentials",
-        remainingAttempts: attemptResult.remainingAttempts
-      });
+      return sendError(
+        res,
+        req,
+        401,
+        attemptResult.locked ? attemptResult.message : "Invalid Credentials",
+        { remainingAttempts: attemptResult.remainingAttempts }
+      );
     }
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {
       if (!twoFactorCode) {
-        return res.status(200).json({ 
+        return sendSuccess(res, req, 200, { 
           success: false, 
           requires2FA: true, 
           message: "Two-factor authentication code required" 
@@ -72,10 +84,8 @@ const loginUser = async (req, res) => {
         await user.save();
       } else if (!verified) {
         const attemptResult = await handleFailedLogin(user, 5, 30);
-        return res.status(401).json({ 
-          success: false, 
-          message: "Invalid two-factor authentication code",
-          remainingAttempts: attemptResult.remainingAttempts
+        return sendError(res, req, 401, "Invalid two-factor authentication code", {
+          remainingAttempts: attemptResult.remainingAttempts,
         });
       }
     }
@@ -95,7 +105,7 @@ const loginUser = async (req, res) => {
     await storeRefreshToken(user._id, refreshToken, ipAddress, userAgent);
 
     const role = user.role;
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       accessToken, 
       refreshToken,
@@ -105,7 +115,7 @@ const loginUser = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    sendError(res, req, 500, "Internal server error");
   }
 };
 
@@ -116,7 +126,7 @@ const refreshAccessToken = async (req, res) => {
   
   try {
     if (!refreshToken) {
-      return res.status(400).json({ success: false, message: "Refresh token is required" });
+      return sendError(res, req, 400, "Refresh token is required");
     }
 
     // Verify refresh token
@@ -125,34 +135,34 @@ const refreshAccessToken = async (req, res) => {
     // Check if token exists in database and is not revoked
     const storedToken = await getRefreshToken(refreshToken);
     if (!storedToken) {
-      return res.status(401).json({ success: false, message: "Invalid or expired refresh token" });
+      return sendError(res, req, 401, "Invalid or expired refresh token");
     }
 
     // Check if user still exists and is not blocked
     const user = await userModel.findById(decoded.id);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return sendError(res, req, 404, "User not found");
     }
     if (user.isBlocked) {
-      return res.status(403).json({ success: false, message: "Account is blocked" });
+      return sendError(res, req, 403, "Account is blocked");
     }
 
     // Generate new access token
     const newAccessToken = createAccessToken(user._id);
 
-    res.status(200).json({ 
+    sendSuccess(res, req, 200, { 
       success: true, 
       accessToken: newAccessToken,
       token: newAccessToken // Backward compatibility
     });
   } catch (error) {
-    res.status(401).json({ success: false, message: error.message || "Invalid refresh token" });
+    sendError(res, req, 401, error.message || "Invalid refresh token");
   }
 };
 
 // Register user with password strength validation
 const registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, referralCode: referralCodeInput } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
   const userAgent = req.headers['user-agent'];
   
@@ -160,17 +170,23 @@ const registerUser = async (req, res) => {
     // Check if user already exists
     const exists = await userModel.findOne({ email });
     if (exists) {
-      return res.status(409).json({ success: false, message: "User already exists" });
+      return sendError(res, req, 409, "User already exists");
     }
 
     // Validate password strength
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.isValid) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Password does not meet requirements",
-        errors: passwordValidation.errors
+      return sendError(res, req, 400, "Password does not meet requirements", {
+        errors: passwordValidation.errors,
       });
+    }
+
+    let referredBy = null;
+    if (referralCodeInput && String(referralCodeInput).trim()) {
+      const ref = await findReferrerByCode(String(referralCodeInput));
+      if (ref) {
+        referredBy = ref._id;
+      }
     }
 
     // Hash password
@@ -181,10 +197,24 @@ const registerUser = async (req, res) => {
       name: name,
       email: email,
       password: hashedPassword,
-      passwordChangedAt: new Date()
+      passwordChangedAt: new Date(),
+      referredBy: referredBy || undefined,
     });
 
-    const user = await newUser.save();
+    let user = await newUser.save();
+
+    await ensureReferralCodeForUser(user);
+
+    if (referredBy) {
+      const bonusReferrer = Number(process.env.LOYALTY_REFERRAL_REFERRER);
+      const bonusReferee = Number(process.env.LOYALTY_REFERRAL_REFEREE);
+      const refPts = Number.isFinite(bonusReferrer) && bonusReferrer >= 0 ? bonusReferrer : 100;
+      const newPts = Number.isFinite(bonusReferee) && bonusReferee >= 0 ? bonusReferee : 50;
+      await userModel.updateOne({ _id: referredBy }, { $inc: { loyaltyPoints: refPts } });
+      await userModel.updateOne({ _id: user._id }, { $inc: { loyaltyPoints: newPts } });
+      await extendLoyaltyBalanceExpiry(referredBy);
+      await extendLoyaltyBalanceExpiry(user._id);
+    }
     
     // Generate tokens
     const accessToken = createAccessToken(user._id);
@@ -194,7 +224,7 @@ const registerUser = async (req, res) => {
     await storeRefreshToken(user._id, refreshToken, ipAddress, userAgent);
 
     const role = user.role;
-    res.status(201).json({ 
+    sendSuccess(res, req, 201, { 
       success: true, 
       accessToken,
       refreshToken,
@@ -203,7 +233,7 @@ const registerUser = async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    sendError(res, req, 500, "Internal server error");
   }
 };
 
@@ -240,11 +270,120 @@ const logoutUser = async (req, res) => {
       await revokeAllUserTokens(userId);
     }
 
-    res.status(200).json({ success: true, message: "Logged out successfully" });
+    sendSuccess(res, req, 200, { success: true, message: "Logged out successfully" });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ success: false, message: "Error during logout" });
+    sendError(res, req, 500, "Error during logout");
   }
 };
 
-export { loginUser, registerUser, refreshAccessToken, logoutUser };
+const getGrowthSummary = async (req, res) => {
+  try {
+    const userId = req.body.userId;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+
+    let user = await userModel
+      .findById(userId)
+      .select(
+        "referralCode loyaltyPoints referredBy segmentTags loyaltyBalanceExpiresAt"
+      );
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+
+    await ensureReferralCodeForUser(user);
+    user = await userModel
+      .findById(userId)
+      .select(
+        "referralCode loyaltyPoints referredBy segmentTags loyaltyBalanceExpiresAt"
+      );
+
+    const referralsCount = await userModel.countDocuments({ referredBy: userId });
+
+    sendSuccess(res, req, 200, {
+      success: true,
+      data: {
+        referralCode: user.referralCode,
+        loyaltyPoints: user.loyaltyPoints ?? 0,
+        referralsCount,
+        referredBy: user.referredBy,
+        segmentTags: user.segmentTags || [],
+        loyaltyBalanceExpiresAt: user.loyaltyBalanceExpiresAt || null,
+      },
+    });
+  } catch (error) {
+    console.error("getGrowthSummary:", error);
+    sendError(res, req, 500, "Error loading growth data");
+  }
+};
+
+const previewLoyalty = async (req, res) => {
+  try {
+    const userId = req.body.userId;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+    const baseTotalInr = Number(req.query.baseTotalInr ?? req.body.baseTotalInr ?? 0);
+    const pointsRequested = Number(
+      req.query.pointsRequested ?? req.body.pointsRequested ?? 0
+    );
+    const data = await previewLoyaltyRedemption(userId, pointsRequested, baseTotalInr);
+    sendSuccess(res, req, 200, { success: true, data });
+  } catch (error) {
+    console.error("previewLoyalty:", error);
+    sendError(res, req, 500, "Error previewing loyalty redemption");
+  }
+};
+
+const getExperimentAssignment = async (req, res) => {
+  try {
+    const userId = req.body.userId;
+    if (!userId) {
+      return sendError(res, req, 401, "Unauthorized");
+    }
+    const { experimentKey } = req.params;
+    const user = await userModel.findById(userId).select("segmentTags");
+    if (!user) {
+      return sendError(res, req, 404, "User not found");
+    }
+    const result = await assignExperimentForUser({
+      experimentKey,
+      userId,
+      userTags: user.segmentTags || [],
+    });
+    if (!result.ok) {
+      if (result.code === "not_found") return sendError(res, req, 404, "Experiment not found");
+      if (result.code === "not_active") return sendError(res, req, 400, "Experiment is not active");
+      if (result.code === "not_in_audience") {
+        return sendSuccess(res, req, 200, {
+          success: true,
+          data: {
+            experimentKey: String(experimentKey || "").toLowerCase(),
+            variant: null,
+            eligible: false,
+          },
+        });
+      }
+      return sendError(res, req, 400, "Invalid experiment request");
+    }
+    return sendSuccess(res, req, 200, {
+      success: true,
+      data: { ...result.data, eligible: true },
+    });
+  } catch (error) {
+    console.error("getExperimentAssignment:", error);
+    return sendError(res, req, 500, "Error resolving experiment assignment");
+  }
+};
+
+export {
+  loginUser,
+  registerUser,
+  refreshAccessToken,
+  logoutUser,
+  getGrowthSummary,
+  previewLoyalty,
+  getExperimentAssignment,
+};

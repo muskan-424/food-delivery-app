@@ -17,6 +17,8 @@ const couponSchema = new mongoose.Schema({
     type: { type: String, enum: ['all', 'category', 'restaurant', 'food'], default: 'all' },
     ids: [{ type: String }]
   },
+  /** If non-empty, user must have every tag (see segmentService) */
+  requiredSegmentTags: { type: [String], default: [] },
   // Link to offer (if generated from offer)
   offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'offer', default: null },
   createdAt: { type: Date, default: Date.now }

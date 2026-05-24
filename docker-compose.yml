@@ -18,6 +18,19 @@ services:
     networks:
       - food-delivery-network
 
+  # Redis (rate limiting + future caching)
+  redis:
+    image: redis:7-alpine
+    container_name: food-delivery-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - food-delivery-network
+
   # Backend API
   backend:
     build:
@@ -32,7 +45,9 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - SALT=${SALT:-10}
-      - MONGO_URL=mongodb://mongodb:27017/${MONGO_DB_NAME:-food-delivery}
+      # Root user is created by the mongo image; authSource=admin matches init default
+      - MONGO_URL=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-password}@mongodb:27017/${MONGO_DB_NAME:-food-delivery}?authSource=admin
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - EMAIL_SERVICE=${EMAIL_SERVICE:-gmail}
       - EMAIL_USER=${EMAIL_USER}
@@ -44,6 +59,7 @@ services:
       - backend_uploads:/app/uploads
     depends_on:
       - mongodb
+      - redis
     networks:
       - food-delivery-network
     healthcheck:
@@ -108,6 +124,8 @@ services:
 
 volumes:
   mongodb_data:
+    driver: local
+  redis_data:
     driver: local
   backend_uploads:
     driver: local

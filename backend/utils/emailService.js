@@ -1,5 +1,12 @@
 import nodemailer from "nodemailer";
 
+export function isSmtpConfigured() {
+  if (process.env.EMAIL_SERVICE === "gmail") {
+    return !!(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD);
+  }
+  return !!(process.env.SMTP_USER && process.env.SMTP_PASSWORD);
+}
+
 // Email service configuration
 const createTransporter = () => {
   // Use environment variables for email configuration
@@ -123,4 +130,37 @@ export const sendAccountLockoutEmail = async (email, unlockTime) => {
     return false;
   }
 };
+
+const defaultFrom = () =>
+  process.env.EMAIL_FROM ||
+  process.env.EMAIL_USER ||
+  process.env.SMTP_USER ||
+  "noreply@localhost";
+
+/**
+ * Generic HTML email (order receipts, etc.). No-op if SMTP is not configured.
+ */
+export async function sendHtmlEmail({ to, subject, html }) {
+  const addr = String(to || "").trim();
+  if (!addr) {
+    return false;
+  }
+  if (!isSmtpConfigured()) {
+    console.warn("[email] SMTP not configured; skipping send to", addr);
+    return false;
+  }
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: defaultFrom(),
+      to: addr,
+      subject,
+      html,
+    });
+    return true;
+  } catch (error) {
+    console.error("sendHtmlEmail:", error);
+    return false;
+  }
+}
 

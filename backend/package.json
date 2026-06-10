@@ -18,6 +18,7 @@
     "migrate:status": "node scripts/migrate.js status",
     "e2e:money-loop": "node scripts/e2e-money-loop.js",
     "smoke:load": "node scripts/smoke_load.js",
+    "smoke:staging": "node scripts/staging_smoke.js",
     "reset-password": "node scripts/resetUserPassword.js",
     "purge-test-users": "node scripts/purgeTestUsers.js"
   },

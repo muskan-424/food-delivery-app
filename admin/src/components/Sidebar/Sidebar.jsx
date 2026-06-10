@@ -81,6 +81,15 @@ const Sidebar = () => {
           <p>Disputes</p>
         </NavLink>
         <NavLink
+          to="/escrow-ops"
+          className={({ isActive }) =>
+            `sidebar-option ${isActive ? "active" : ""}`
+          }
+        >
+          <img src={assets.order_icon} alt="" />
+          <p>Escrow Ops</p>
+        </NavLink>
+        <NavLink
           to="/offers"
           className={({ isActive }) =>
             `sidebar-option ${isActive ? "active" : ""}`

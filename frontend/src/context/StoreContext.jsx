@@ -46,7 +46,10 @@ const StoreContextProvider = (props) => {
   const [wishlistItems, setWishlistItems] = useState([]);
   const [wishlistIds, setWishlistIds] = useState(new Set());
   const url = import.meta.env.VITE_API_URL || "http://localhost:4000";
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => {
+    const storedToken = getToken();
+    return storedToken && isTokenValid(storedToken) ? storedToken : "";
+  });
   const [partnerPayoutAccess, setPartnerPayoutAccess] = useState(false);
   const [partnerRestaurantManageAccess, setPartnerRestaurantManageAccess] = useState(false);
   const [partnerRestaurantId, setPartnerRestaurantId] = useState("");

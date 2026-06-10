@@ -1,6 +1,29 @@
 {
+  "name": "tomato-food-delivery",
+  "private": true,
+  "description": "TOMATO — Food delivery platform (Express + MongoDB + React)",
+  "scripts": {
+    "dev:backend": "docker compose up --build",
+    "dev:backend:detached": "docker compose up --build -d",
+    "dev:backend:staging": "docker compose -f docker-compose.yml -f docker-compose.staging.yml up --build",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:admin": "npm run dev --prefix admin",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend && npm install --prefix admin",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:admin": "npm run build --prefix admin",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "lint:admin": "npm run lint --prefix admin",
+    "test:backend": "npm test --prefix backend",
+    "test:backend:integration": "npm run test:integration --prefix backend",
+    "test:smoke": "npm run test:smoke --prefix backend",
+    "migrate:status": "npm run migrate:status --prefix backend",
+    "dev:all": "concurrently -n api,web,admin -c blue,green,magenta \"docker compose up --build\" \"npm run dev --prefix frontend\" \"npm run dev --prefix admin\""
+  },
   "dependencies": {
     "crypto-js": "^4.2.0",
     "express-enforces-ssl": "^1.1.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

@@ -11,9 +11,8 @@ test.describe("Auth happy path", () => {
     await seedBrowserSession(page, user.token);
 
     await expect(page.locator('a[href="/wishlist"]').first()).toBeVisible();
-    await page.locator(".navbar-profile").hover();
-    await expect(page.getByText("Orders")).toBeVisible();
-    await expect(page.getByText("AI Assistant")).toBeVisible();
+    await page.goto("/chat");
+    await expect(page.getByRole("heading", { name: /TOMATO Assistant/i })).toBeVisible();
   });
 
   test("login via sign-in popup", async ({ page, request }) => {

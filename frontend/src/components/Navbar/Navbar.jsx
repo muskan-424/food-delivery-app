@@ -3,6 +3,7 @@ import "./Navbar.css";
 import { assets } from "../../assets/frontend_assets/assets";
 import { Link, useNavigate } from "react-router-dom";
 import { StoreContext } from "../../context/StoreContext";
+import { useBeta } from "../../context/BetaContext";
 import { toast } from "react-toastify";
 
 const Navbar = ({ setShowLogin }) => {
@@ -19,6 +20,8 @@ const Navbar = ({ setShowLogin }) => {
     partnerRestaurantManageAccess,
     partnerAccessResolved,
   } = useContext(StoreContext);
+  const { config: betaConfig } = useBeta();
+  const flags = betaConfig.feature_flags || {};
   const navigate=useNavigate();
 
   const logout=()=>{
@@ -146,10 +149,12 @@ const Navbar = ({ setShowLogin }) => {
               <img src={assets.profile_icon} alt="" />
               <ul className="nav-profile-dropdown">
                 <li onClick={()=>navigate("/myorders")}><img src={assets.bag_icon} alt="" /><p>Orders</p></li>
-                <li onClick={() => navigate("/group-orders")}>
-                  <span className="dropdown-icon">👥</span>
-                  <p>Group orders</p>
-                </li>
+                {flags.group_orders !== false && (
+                  <li onClick={() => navigate("/group-orders")}>
+                    <span className="dropdown-icon">👥</span>
+                    <p>Group orders</p>
+                  </li>
+                )}
                 <li onClick={() => navigate("/my-disputes")}>
                   <span className="dropdown-icon">⚖</span>
                   <p>My disputes</p>
@@ -157,14 +162,18 @@ const Navbar = ({ setShowLogin }) => {
                 <li onClick={()=>navigate("/payments")}><span className="dropdown-icon">💳</span><p>Payment History</p></li>
                 <li onClick={()=>navigate("/profile")}><img src={assets.profile_icon} alt="" /><p>Profile</p></li>
                 <li onClick={()=>navigate("/wishlist")}><span className="dropdown-icon">🤍</span><p>Wishlist</p></li>
-                <li onClick={() => navigate("/notifications")}>
-                  <span className="dropdown-icon">🔔</span>
-                  <p>Notifications</p>
-                </li>
-                <li onClick={() => navigate("/chat")}>
-                  <span className="dropdown-icon">✨</span>
-                  <p>AI Assistant</p>
-                </li>
+                {flags.notifications !== false && (
+                  <li onClick={() => navigate("/notifications")}>
+                    <span className="dropdown-icon">🔔</span>
+                    <p>Notifications</p>
+                  </li>
+                )}
+                {flags.ai_assistant !== false && (
+                  <li onClick={() => navigate("/chat")}>
+                    <span className="dropdown-icon">✨</span>
+                    <p>AI Assistant</p>
+                  </li>
+                )}
                 <li onClick={()=>navigate("/support")}><span className="dropdown-icon">💬</span><p>Support</p></li>
                 {partnerAccessResolved && partnerPayoutAccess ? (
                   <li onClick={() => navigate("/partner/payouts")}>

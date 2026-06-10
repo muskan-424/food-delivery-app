@@ -37,6 +37,7 @@ export function getCapabilitiesSnapshot() {
       enableWebsocket: appConfig.enableWebsocket,
       enableWalletLedger: appConfig.enableWalletLedger,
       requireRestaurantKycForOrders: appConfig.requireRestaurantKycForOrders,
+      betaModeEnabled: appConfig.betaModeEnabled,
     },
     subsystems: {
       mongo: { status: "required", configured: true },

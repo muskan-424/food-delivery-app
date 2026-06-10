@@ -1,0 +1,52 @@
+.beta-feedback-page {
+  max-width: 560px;
+  margin: 2rem auto;
+  padding: 0 1rem 3rem;
+}
+
+.beta-feedback-page h1 {
+  margin: 0 0 8px;
+}
+
+.beta-feedback-intro {
+  color: #555;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.beta-feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.beta-feedback-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #444;
+}
+
+.beta-feedback-form select,
+.beta-feedback-form input,
+.beta-feedback-form textarea {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.beta-feedback-form button {
+  align-self: flex-start;
+  border: none;
+  background: tomato;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.beta-feedback-form button:disabled {
+  opacity: 0.6;
+}

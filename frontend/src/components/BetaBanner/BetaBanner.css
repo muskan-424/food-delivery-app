@@ -1,0 +1,27 @@
+.beta-banner {
+  background: linear-gradient(90deg, rgba(255, 99, 71, 0.12), rgba(255, 165, 0, 0.08));
+  border-bottom: 1px solid rgba(255, 99, 71, 0.25);
+}
+
+.beta-banner-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #555;
+}
+
+.beta-banner-inner strong {
+  color: tomato;
+}
+
+.beta-feedback-link {
+  color: #e65100;
+  font-weight: 600;
+  text-decoration: underline;
+}

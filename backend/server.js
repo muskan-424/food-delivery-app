@@ -45,6 +45,7 @@ import orderChatRouter from "./routes/orderChatRoute.js";
 import chatRouter from "./routes/chatRoute.js";
 import orderRequestRouter from "./routes/orderRequestRoute.js";
 import voiceRouter from "./routes/voiceRoute.js";
+import betaRouter from "./routes/betaRoute.js";
 import { initWebsocketServer } from "./realtime/wsHub.js";
 
 // app config
@@ -178,6 +179,7 @@ app.use("/api/order-chat", orderChatRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/order-requests", orderRequestRouter);
 app.use("/api/voice", voiceRouter);
+app.use("/api/beta", betaRouter);
 app.use("/api/partner", partnerApiRouter);
 
 // Error handling middleware for multer file upload errors

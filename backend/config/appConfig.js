@@ -445,4 +445,43 @@ export const appConfig = {
     if (v === "signzy") return "signzy";
     return "stub";
   },
+
+  /** Closed beta mode — limits scope and surfaces feedback banner */
+  get betaModeEnabled() {
+    return process.env.BETA_MODE_ENABLED === "true";
+  },
+
+  get betaCityLabel() {
+    return String(process.env.BETA_CITY_LABEL || "Delhi NCR").trim();
+  },
+
+  /** Comma-separated delivery PIN codes allowed during closed beta */
+  get betaPinCodes() {
+    return String(process.env.BETA_PIN_CODES || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  },
+
+  /** Comma-separated food categories highlighted in beta (informational) */
+  get betaCategories() {
+    return String(process.env.BETA_CATEGORIES || "North Indian,South Indian,Fast Food")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  },
+
+  /** Nav/feature toggles during closed beta (ignored when betaModeEnabled is false) */
+  get betaFeatureAiAssistant() {
+    return process.env.BETA_FEATURE_AI_ASSISTANT !== "false";
+  },
+  get betaFeatureOrderChat() {
+    return process.env.BETA_FEATURE_ORDER_CHAT !== "false";
+  },
+  get betaFeatureGroupOrders() {
+    return process.env.BETA_FEATURE_GROUP_ORDERS === "true";
+  },
+  get betaFeatureVoiceInput() {
+    return process.env.BETA_FEATURE_VOICE_INPUT !== "false";
+  },
 };

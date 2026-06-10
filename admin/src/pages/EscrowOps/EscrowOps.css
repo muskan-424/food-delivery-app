@@ -1,0 +1,143 @@
+.escrow-ops-page {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.escrow-ops-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.escrow-ops-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.escrow-ops-header button {
+  padding: 8px 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.escrow-ops-muted {
+  color: #666;
+}
+
+.escrow-ops-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.escrow-ops-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.escrow-ops-card .label {
+  font-size: 12px;
+  color: #666;
+}
+
+.escrow-ops-card strong {
+  font-size: 20px;
+  color: #333;
+}
+
+.escrow-ops-card.highlight {
+  border-left: 4px solid #1976d2;
+}
+
+.escrow-ops-card.warn {
+  border-left: 4px solid #f57c00;
+}
+
+.escrow-ops-status-table,
+.escrow-ops-payments-panel,
+.escrow-ops-actions {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.escrow-ops-status-table h3,
+.escrow-ops-payments-panel h3,
+.escrow-ops-actions h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.escrow-ops-status-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.escrow-ops-status-table th,
+.escrow-ops-status-table td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.escrow-ops-payments-panel ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.escrow-ops-actions label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin: 10px 0 4px;
+}
+
+.escrow-ops-actions input,
+.escrow-ops-actions textarea {
+  width: 100%;
+  max-width: 480px;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.escrow-ops-action-row {
+  margin: 12px 0;
+}
+
+.escrow-ops-actions button {
+  margin-top: 10px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #1976d2;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.escrow-ops-actions button.secondary {
+  background: #f57c00;
+}
+
+.escrow-ops-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

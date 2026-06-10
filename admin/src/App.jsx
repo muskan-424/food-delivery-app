@@ -16,6 +16,7 @@ import UserManagement from "./pages/UserManagement/UserManagement";
 import CreateAdmin from "./pages/CreateAdmin/CreateAdmin";
 import Payouts from "./pages/Payouts/Payouts";
 import Disputes from "./pages/Disputes/Disputes";
+import EscrowOps from "./pages/EscrowOps/EscrowOps";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Login from "./components/Login/Login";
@@ -86,6 +87,11 @@ const App = () => {
             <Route path="/disputes" element={
               <ProtectedRoute>
                 <Disputes url={url}/>
+              </ProtectedRoute>
+            } />
+            <Route path="/escrow-ops" element={
+              <ProtectedRoute>
+                <EscrowOps url={url}/>
               </ProtectedRoute>
             } />
             <Route path="/offers" element={

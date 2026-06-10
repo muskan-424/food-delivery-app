@@ -42,14 +42,18 @@ const Disputes = ({ url }) => {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [summary, setSummary] = useState(null);
   const [form, setForm] = useState({
     status: "open",
     priority: "normal",
     resolution: "",
     internalNote: "",
     paymentId: "",
+    financialOutcome: "none",
+    refundAmountInr: "",
   });
   const [paymentIdInitial, setPaymentIdInitial] = useState("");
+  const [escrowBusy, setEscrowBusy] = useState(false);
 
   useEffect(() => {
     if (!token || !admin) {
@@ -57,7 +61,19 @@ const Disputes = ({ url }) => {
       return;
     }
     fetchList();
+    fetchSummary();
   }, [token, admin, page, statusFilter]);
+
+  const fetchSummary = async () => {
+    try {
+      const res = await axios.get(`${url}/api/disputes/admin/summary`, {
+        headers: { token },
+      });
+      if (res.data?.success) setSummary(res.data.data);
+    } catch {
+      /* non-blocking */
+    }
+  };
 
   const fetchList = async () => {
     try {
@@ -117,6 +133,11 @@ const Disputes = ({ url }) => {
         resolution: d.resolution || "",
         internalNote: "",
         paymentId: payId,
+        financialOutcome: d.financialOutcome || "none",
+        refundAmountInr:
+          d.refundAmountInr != null && d.refundAmountInr !== ""
+            ? String(d.refundAmountInr)
+            : "",
       });
     } catch (e) {
       console.error(e);
@@ -148,6 +169,13 @@ const Disputes = ({ url }) => {
       if (pidNow !== pidWas) {
         body.paymentId = pidNow || null;
       }
+      if (form.financialOutcome) {
+        body.financialOutcome = form.financialOutcome;
+      }
+      if (form.refundAmountInr !== "") {
+        const amt = Number(form.refundAmountInr);
+        if (Number.isFinite(amt) && amt >= 0) body.refundAmountInr = amt;
+      }
 
       const res = await axios.patch(
         `${url}/api/disputes/admin/${selectedId}`,
@@ -161,6 +189,7 @@ const Disputes = ({ url }) => {
       toast.success("Dispute updated");
       setForm((f) => ({ ...f, internalNote: "" }));
       fetchList();
+      fetchSummary();
       loadDetail(selectedId);
     } catch (e) {
       console.error(e);
@@ -179,6 +208,30 @@ const Disputes = ({ url }) => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const disputeOrderId = (d) => {
+    const o = d?.orderId;
+    if (!o) return "";
+    return typeof o === "object" ? String(o._id || "") : String(o);
+  };
+
+  const initiateEscrowPayout = async (orderId) => {
+    if (!orderId) return;
+    try {
+      setEscrowBusy(true);
+      const res = await axios.post(
+        `${url}/api/payment/razorpay/payout/initiate-escrow`,
+        { orderId },
+        { headers: { token } }
+      );
+      if (res.data?.success) toast.success(res.data.message || "Payout initiated");
+      else toast.error(res.data?.message || "Payout failed");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Error initiating payout");
+    } finally {
+      setEscrowBusy(false);
+    }
   };
 
   const orderNum = (row) => {
@@ -211,6 +264,35 @@ const Disputes = ({ url }) => {
           </div>
         </div>
       </div>
+
+      {summary && (
+        <div className="disputes-summary-cards">
+          <div className="disputes-summary-card">
+            <span>Active</span>
+            <strong>{summary.totals?.active ?? 0}</strong>
+          </div>
+          <div className="disputes-summary-card warn">
+            <span>Overdue SLA</span>
+            <strong>{summary.totals?.overdue ?? 0}</strong>
+          </div>
+          <div className="disputes-summary-card">
+            <span>Due in 12h</span>
+            <strong>{summary.totals?.dueSoon12h ?? 0}</strong>
+          </div>
+          <div className="disputes-summary-card">
+            <span>Open</span>
+            <strong>{summary.byStatus?.open ?? 0}</strong>
+          </div>
+          <div className="disputes-summary-card">
+            <span>In review</span>
+            <strong>{summary.byStatus?.in_review ?? 0}</strong>
+          </div>
+          <div className="disputes-summary-card">
+            <span>High priority</span>
+            <strong>{summary.byPriority?.high ?? 0}</strong>
+          </div>
+        </div>
+      )}
 
       <div className="disputes-layout">
         <div className="disputes-table-wrap">
@@ -341,6 +423,30 @@ const Disputes = ({ url }) => {
                 <option value="high">high</option>
               </select>
 
+              <label className="dispute-field-label">Financial outcome (on resolve)</label>
+              <select
+                value={form.financialOutcome}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, financialOutcome: e.target.value }))
+                }
+              >
+                <option value="none">none</option>
+                <option value="release">release (escrow to restaurant)</option>
+                <option value="refund">refund (customer)</option>
+              </select>
+
+              <label className="dispute-field-label">Refund amount (INR, if refund)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.refundAmountInr}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, refundAmountInr: e.target.value }))
+                }
+                placeholder="Optional"
+              />
+
               <label className="dispute-field-label">Resolution (customer-visible summary)</label>
               <textarea
                 value={form.resolution}
@@ -389,6 +495,32 @@ const Disputes = ({ url }) => {
                   </div>
                 </>
               )}
+              {detail.disputeEvents?.length > 0 && (
+                <>
+                  <label className="dispute-field-label">Escrow / dispute events</label>
+                  <div className="dispute-notes">
+                    {detail.disputeEvents.map((ev, i) => (
+                      <pre key={i}>
+                        {formatDate(ev.createdAt)} — {ev.type}
+                        {ev.meta ? ` · ${JSON.stringify(ev.meta)}` : ""}
+                      </pre>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {disputeOrderId(detail) && (
+                <div className="dispute-escrow-actions">
+                  <button
+                    type="button"
+                    disabled={escrowBusy}
+                    onClick={() => initiateEscrowPayout(disputeOrderId(detail))}
+                  >
+                    {escrowBusy ? "Processing…" : "Initiate escrow payout"}
+                  </button>
+                </div>
+              )}
+
               {detail.statusHistory?.length > 0 && (
                 <>
                   <label className="dispute-field-label">Status timeline</label>

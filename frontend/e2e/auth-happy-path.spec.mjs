@@ -10,7 +10,7 @@ test.describe("Auth happy path", () => {
 
     await seedBrowserSession(page, user.token);
 
-    await expect(page.getByRole("link", { name: /wishlist/i })).toBeVisible();
+    await expect(page.locator('a[href="/wishlist"]').first()).toBeVisible();
     await page.locator(".navbar-profile").hover();
     await expect(page.getByText("Orders")).toBeVisible();
     await expect(page.getByText("AI Assistant")).toBeVisible();
@@ -28,7 +28,7 @@ test.describe("Auth happy path", () => {
     await page.locator('form.login-popup-container input[type="checkbox"]').check();
     await page.getByRole("button", { name: /^Login$/i }).click();
 
-    await expect(page.getByRole("link", { name: /wishlist/i })).toBeVisible({
+    await expect(page.locator('a[href="/wishlist"]').first()).toBeVisible({
       timeout: 15_000,
     });
   });

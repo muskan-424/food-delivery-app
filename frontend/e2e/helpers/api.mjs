@@ -31,10 +31,19 @@ export async function loginUser(request, { email, password }) {
   return { email, token, json };
 }
 
+export async function waitForSignedInNavbar(page) {
+  await page.locator('a[href="/wishlist"]').first().waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
+}
+
 export async function seedBrowserSession(page, token) {
   await page.goto("/");
   await page.evaluate((t) => {
     localStorage.setItem("token", t);
+    localStorage.removeItem("tokenExpiration");
   }, token);
   await page.reload();
+  await waitForSignedInNavbar(page);
 }

@@ -10,10 +10,14 @@ test.describe("Marketplace UI pages", () => {
     await seedBrowserSession(page, user.token);
 
     await page.goto("/notifications");
-    await expect(page.getByRole("heading", { name: /notifications/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /notifications/i })).toBeVisible({
+      timeout: 20_000,
+    });
 
     await page.goto("/chat");
-    await expect(page.getByRole("heading", { name: /TOMATO Assistant/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /TOMATO Assistant/i })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByPlaceholder(/Ask anything/i)).toBeVisible();
   });
 

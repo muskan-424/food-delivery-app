@@ -10,7 +10,7 @@
     "create-admin": "node scripts/createFirstAdmin.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "vitest run --config vitest.integration.config.js",
     "test:setup": "node test-setup.js",
     "test:smoke": "node smoke-test.js",
     "migrate:up": "node scripts/migrate.js up",

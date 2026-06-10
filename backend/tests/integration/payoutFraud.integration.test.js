@@ -4,6 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 dotenv.config();
 
+if (!process.env.ENCRYPTION_KEY) {
+  process.env.ENCRYPTION_KEY =
+    "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456";
+}
+
 const runIntegration = process.env.RUN_INTEGRATION_TESTS === "true" && !!process.env.MONGO_URL;
 
 describe.skipIf(!runIntegration)("payout fraud rules (integration)", () => {
@@ -21,8 +26,10 @@ describe.skipIf(!runIntegration)("payout fraud rules (integration)", () => {
     const orderEscrowModel = (await import("../../models/orderEscrowModel.js")).default;
     const { collectPayoutFraudSignals } = await import("../../services/payoutFraudRulesService.js");
 
+    const userId = new mongoose.Types.ObjectId().toString();
+
     const order = await orderModel.create({
-      userId: "integration_test_user",
+      userId,
       orderNumber: `INT${Date.now()}`,
       amount: 100,
       finalAmount: 100,

@@ -3,6 +3,13 @@ import groupOrderSessionModel from "../models/groupOrderSessionModel.js";
 import groupSplitPaymentModel from "../models/groupSplitPaymentModel.js";
 import userModel from "../models/userModel.js";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
+import {
+  createRazorpayOrder,
+  fetchRazorpayPayment,
+  getPublishableKeyId,
+  isRazorpayConfigured,
+  verifyRazorpayPaymentSignature,
+} from "../services/razorpayService.js";
 
 function buildInviteCode() {
   return crypto.randomBytes(4).toString("hex").toUpperCase();
@@ -288,28 +295,184 @@ const initializeGroupSplitPayments = async (req, res) => {
   }
 };
 
+async function resolveMemberShare(row, userId) {
+  const isMember = (row.members || []).some((m) => String(m.userId) === userId);
+  if (!isMember) return { ok: false, status: 403, message: "Not allowed" };
+  const shareRow = (row.splitPlan?.shares || []).find((x) => String(x.userId) === userId);
+  const amount = Number(shareRow?.amount || 0);
+  if (amount <= 0) {
+    return { ok: false, status: 400, message: "No payable share amount" };
+  }
+  return {
+    ok: true,
+    amount,
+    currency: String(row.splitPlan?.currency || "INR"),
+  };
+}
+
+const verifyMyGroupSplitRazorpay = async (req, res) => {
+  try {
+    if (!isRazorpayConfigured()) {
+      return sendError(res, req, 503, "Razorpay is not configured");
+    }
+    const userId = String(req.body.userId || "").trim();
+    const { sessionId } = req.params;
+    const {
+      razorpay_order_id: razorpayOrderId,
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_signature: razorpaySignature,
+    } = req.body;
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return sendError(
+        res,
+        req,
+        400,
+        "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required"
+      );
+    }
+
+    const row = await groupOrderSessionModel.findById(sessionId).lean();
+    if (!row) return sendError(res, req, 404, "Group session not found");
+    const share = await resolveMemberShare(row, userId);
+    if (!share.ok) return sendError(res, req, share.status, share.message);
+
+    const payment = await groupSplitPaymentModel.findOne({ sessionId: row._id, userId });
+    if (!payment) {
+      return sendError(res, req, 404, "Split payment record not found — initialize split payments first");
+    }
+    if (payment.status === "paid") {
+      return sendSuccess(res, req, 200, {
+        success: true,
+        message: "Share already paid",
+        data: payment,
+      });
+    }
+    if (payment.razorpayOrderId && payment.razorpayOrderId !== razorpayOrderId) {
+      return sendError(res, req, 400, "Razorpay order id does not match this checkout session");
+    }
+    if (!verifyRazorpayPaymentSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature)) {
+      return sendError(res, req, 401, "Invalid payment signature");
+    }
+
+    let rzPay;
+    try {
+      rzPay = await fetchRazorpayPayment(razorpayPaymentId);
+    } catch (e) {
+      console.error("fetchRazorpayPayment (group split):", e);
+      return sendError(res, req, 502, "Could not verify payment with Razorpay");
+    }
+
+    const expectedPaise = Math.round(share.amount * 100);
+    if (Number(rzPay.amount) !== expectedPaise) {
+      return sendError(res, req, 400, "Payment amount mismatch");
+    }
+    if (String(rzPay.order_id || "") !== String(razorpayOrderId)) {
+      return sendError(res, req, 400, "Razorpay order id mismatch");
+    }
+    if (!["captured", "authorized"].includes(String(rzPay.status))) {
+      return sendError(res, req, 400, `Payment not successful (status: ${rzPay.status})`);
+    }
+
+    payment.status = "paid";
+    payment.amount = share.amount;
+    payment.currency = share.currency;
+    payment.razorpayOrderId = razorpayOrderId;
+    payment.razorpayPaymentId = razorpayPaymentId;
+    payment.transactionId = razorpayPaymentId;
+    payment.paymentMethod = "razorpay";
+    payment.paidAt = new Date();
+    await payment.save();
+
+    return sendSuccess(res, req, 200, {
+      success: true,
+      message: "Group share payment verified",
+      data: payment,
+    });
+  } catch (error) {
+    console.error("verifyMyGroupSplitRazorpay:", error);
+    return sendError(res, req, 500, "Error verifying group share payment");
+  }
+};
+
 const markMyGroupSplitPaid = async (req, res) => {
   try {
     const userId = String(req.body.userId || "").trim();
     const { sessionId } = req.params;
+    const {
+      razorpay_order_id: razorpayOrderId,
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_signature: razorpaySignature,
+      mode,
+    } = req.body;
+
+    if (razorpayOrderId && razorpayPaymentId && razorpaySignature) {
+      return verifyMyGroupSplitRazorpay(req, res);
+    }
+
     const row = await groupOrderSessionModel.findById(sessionId).lean();
     if (!row) return sendError(res, req, 404, "Group session not found");
-    const isMember = (row.members || []).some((m) => String(m.userId) === userId);
-    if (!isMember) return sendError(res, req, 403, "Not allowed");
-    const shareRow = (row.splitPlan?.shares || []).find((x) => String(x.userId) === userId);
-    const amount = Number(shareRow?.amount || 0);
-    if (amount <= 0) {
-      return sendError(res, req, 400, "No payable share amount");
+    const share = await resolveMemberShare(row, userId);
+    if (!share.ok) return sendError(res, req, share.status, share.message);
+
+    const manualMode = String(mode || "").toLowerCase() === "manual";
+    if (isRazorpayConfigured() && !manualMode) {
+      let payment = await groupSplitPaymentModel.findOne({ sessionId: row._id, userId });
+      if (!payment) {
+        payment = await groupSplitPaymentModel.create({
+          sessionId: row._id,
+          userId,
+          amount: share.amount,
+          currency: share.currency,
+          status: "pending",
+        });
+      }
+      if (payment.status === "paid") {
+        return sendSuccess(res, req, 200, {
+          success: true,
+          message: "Share already paid",
+          data: payment,
+        });
+      }
+
+      const amountPaise = Math.round(share.amount * 100);
+      const rzOrder = await createRazorpayOrder({
+        amountPaise,
+        receipt: `GSP${String(row._id).slice(-8)}`,
+        notes: {
+          groupSplitSessionId: String(row._id),
+          userId,
+          purpose: "group_split_share",
+        },
+      });
+
+      payment.amount = share.amount;
+      payment.currency = share.currency;
+      payment.razorpayOrderId = rzOrder.id;
+      payment.paymentMethod = "razorpay";
+      await payment.save();
+
+      return sendSuccess(res, req, 200, {
+        success: true,
+        message: "Razorpay order created for group share",
+        keyId: getPublishableKeyId(),
+        razorpayOrderId: rzOrder.id,
+        amountPaise,
+        currency: share.currency,
+        sessionId: String(row._id),
+        data: payment,
+      });
     }
+
     const transactionId = String(req.body.transactionId || "").trim() || `GSP_${Date.now()}`;
     const payment = await groupSplitPaymentModel.findOneAndUpdate(
       { sessionId: row._id, userId },
       {
         $set: {
-          amount,
-          currency: String(row.splitPlan?.currency || "INR"),
+          amount: share.amount,
+          currency: share.currency,
           status: "paid",
           transactionId,
+          paymentMethod: manualMode ? "manual" : "dev",
           paidAt: new Date(),
         },
       },
@@ -322,7 +485,7 @@ const markMyGroupSplitPaid = async (req, res) => {
     });
   } catch (error) {
     console.error("markMyGroupSplitPaid:", error);
-    return sendError(res, req, 500, "Error marking share as paid");
+    return sendError(res, req, 500, "Error processing group share payment");
   }
 };
 
@@ -353,6 +516,8 @@ const getGroupSplitPaymentsSummary = async (req, res) => {
         status: String(payment?.status || "pending"),
         paidAt: payment?.paidAt || null,
         transactionId: String(payment?.transactionId || ""),
+        razorpayOrderId: String(payment?.razorpayOrderId || ""),
+        paymentMethod: String(payment?.paymentMethod || ""),
       };
     });
     const totalAmount = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
@@ -392,5 +557,6 @@ export {
   getMyGroupSplitShare,
   initializeGroupSplitPayments,
   markMyGroupSplitPaid,
+  verifyMyGroupSplitRazorpay,
   getGroupSplitPaymentsSummary,
 };

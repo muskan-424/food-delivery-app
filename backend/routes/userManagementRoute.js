@@ -47,6 +47,12 @@ import {
   clearUserRestaurantStaff,
   getRestaurantStaffPermissionCatalog,
 } from "../controllers/userManagementController.js";
+import { getAdminAuditLogs } from "../controllers/auditLogController.js";
+import { getKycMetricsAdmin } from "../controllers/kycController.js";
+import {
+  getEscrowMetricsAdmin,
+  getPaymentOpsMetricsAdmin,
+} from "../controllers/opsMetricsController.js";
 import authMiddleware from "../middleware/auth.js";
 import adminMiddleware from "../middleware/adminMiddleware.js";
 import { apiLimiter } from "../middleware/rateLimiter.js";
@@ -79,6 +85,22 @@ userManagementRouter.post("/user/:userId/unblock", apiLimiter, authMiddleware, a
 userManagementRouter.post("/user/:userId/warning", apiLimiter, authMiddleware, adminMiddleware, giveWarning);
 userManagementRouter.post("/user/:userId/remove-warning", apiLimiter, authMiddleware, adminMiddleware, removeWarning);
 userManagementRouter.get("/activities", apiLimiter, authMiddleware, adminMiddleware, getAllActivities);
+userManagementRouter.get("/audit-logs", apiLimiter, authMiddleware, adminMiddleware, getAdminAuditLogs);
+userManagementRouter.get("/metrics/kyc", apiLimiter, authMiddleware, adminMiddleware, getKycMetricsAdmin);
+userManagementRouter.get(
+  "/metrics/escrow",
+  apiLimiter,
+  authMiddleware,
+  adminMiddleware,
+  getEscrowMetricsAdmin
+);
+userManagementRouter.get(
+  "/metrics/payments",
+  apiLimiter,
+  authMiddleware,
+  adminMiddleware,
+  getPaymentOpsMetricsAdmin
+);
 userManagementRouter.get("/fraud/summary", apiLimiter, authMiddleware, adminMiddleware, getFraudSummary);
 userManagementRouter.get("/dashboard/stats", apiLimiter, authMiddleware, adminMiddleware, getDashboardStats);
 userManagementRouter.get("/segments/catalog", apiLimiter, authMiddleware, adminMiddleware, getSegmentTagCatalog);

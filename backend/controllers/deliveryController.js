@@ -633,6 +633,8 @@ const finalizePodEvidenceUpload = async (req, res) => {
     if (!key) {
       return sendError(res, req, 400, "Valid key is required");
     }
+    const slotRaw = String(req.body.slot || "after").toLowerCase();
+    const slot = ["before", "after"].includes(slotRaw) ? slotRaw : "after";
     const assignment = await deliveryAssignmentModel.findOne({
       _id: assignmentId,
       deliveryPersonId: authCtx.deliveryPersonId,
@@ -640,18 +642,26 @@ const finalizePodEvidenceUpload = async (req, res) => {
     if (!assignment) {
       return sendError(res, req, 404, "Assignment not found");
     }
-    assignment.pendingPodEvidence = {
-      key,
-      uploadedAt: new Date(),
-    };
+    const pending = assignment.pendingPodEvidence || {};
+    if (slot === "before") {
+      pending.beforeKey = key;
+    } else {
+      pending.afterKey = key;
+      pending.key = key;
+    }
+    pending.uploadedAt = new Date();
+    assignment.pendingPodEvidence = pending;
     await assignment.save();
     return sendSuccess(res, req, 200, {
       success: true,
       message: "POD evidence key finalized",
       data: {
         assignmentId: String(assignment._id),
+        slot,
         podEvidenceKey: key,
         podEvidenceUrl: getMediaPublicUrl(key),
+        beforeImageUrl: pending.beforeKey ? getMediaPublicUrl(pending.beforeKey) : "",
+        afterImageUrl: pending.afterKey ? getMediaPublicUrl(pending.afterKey) : "",
       },
     });
   } catch (error) {
@@ -762,10 +772,17 @@ const markDelivered = async (req, res) => {
     if (!assignment) {
       return sendError(res, req, 404, "Assignment not found");
     }
-    const pendingPodEvidenceUrl = assignment?.pendingPodEvidence?.key
-      ? getMediaPublicUrl(assignment.pendingPodEvidence.key)
-      : "";
-    const resolvedPodEvidenceUrl = podEvidenceUrl || pendingPodEvidenceUrl;
+    const pending = assignment?.pendingPodEvidence || {};
+    const pendingAfterUrl = pending.afterKey
+      ? getMediaPublicUrl(pending.afterKey)
+      : pending.key
+        ? getMediaPublicUrl(pending.key)
+        : "";
+    const pendingBeforeUrl = pending.beforeKey ? getMediaPublicUrl(pending.beforeKey) : "";
+    const resolvedPodEvidenceUrl = podEvidenceUrl || pendingAfterUrl;
+    const resolvedBeforeUrl = String(podInput.beforeImageUrl || "").slice(0, 2000) || pendingBeforeUrl;
+    const resolvedAfterUrl =
+      String(podInput.afterImageUrl || "").slice(0, 2000) || pendingAfterUrl || resolvedPodEvidenceUrl;
 
     if (podMethod === "otp" && assignment.otpHash) {
       if (!otp || String(otp).length < 4) {
@@ -796,8 +813,14 @@ const markDelivered = async (req, res) => {
       orderForPod.proofOfDelivery = {
         method: podMethod,
         verifiedAt: new Date(),
+        uploadedAt: pending.uploadedAt || new Date(),
         note: podNote,
-        evidenceUrl: resolvedPodEvidenceUrl,
+        evidenceUrl: resolvedAfterUrl || resolvedPodEvidenceUrl,
+        beforeImageUrl: resolvedBeforeUrl,
+        afterImageUrl: resolvedAfterUrl || resolvedPodEvidenceUrl,
+        evidenceJson: podInput.evidenceJson && typeof podInput.evidenceJson === "object"
+          ? podInput.evidenceJson
+          : null,
         signatureName: podSignatureName,
       };
       await orderForPod.save();
@@ -826,9 +849,26 @@ const markDelivered = async (req, res) => {
       return sendError(res, req, 404, "Order not found");
     }
 
+    try {
+      const { runDeliveryVerificationForOrder } = await import(
+        "../services/deliveryVerificationService.js"
+      );
+      await runDeliveryVerificationForOrder(assignment.orderId, {
+        actorId: deliveryPersonId,
+        actorKind: "delivery_person",
+      });
+    } catch (verifyErr) {
+      console.error("post-delivery verification:", verifyErr.message);
+    }
+
     assignment.status = 'delivered';
     assignment.deliveredAt = new Date();
-    assignment.pendingPodEvidence = { key: "", uploadedAt: null };
+    assignment.pendingPodEvidence = {
+      key: "",
+      beforeKey: "",
+      afterKey: "",
+      uploadedAt: null,
+    };
     await assignment.save();
 
     // Mark delivery person as available

@@ -27,6 +27,7 @@ import {
 } from "../services/loyaltyService.js";
 import { assignExperimentForUser } from "../services/abTestingService.js";
 import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import { writeAudit } from "../services/auditService.js";
 
 // Login user with enhanced security
 const loginUser = async (req, res) => {
@@ -105,6 +106,12 @@ const loginUser = async (req, res) => {
     await storeRefreshToken(user._id, refreshToken, ipAddress, userAgent);
 
     const role = user.role;
+    await writeAudit(req, {
+      userId: user._id,
+      action: "auth.login",
+      resourceType: "user",
+      resourceId: String(user._id),
+    });
     sendSuccess(res, req, 200, { 
       success: true, 
       accessToken, 
@@ -224,6 +231,12 @@ const registerUser = async (req, res) => {
     await storeRefreshToken(user._id, refreshToken, ipAddress, userAgent);
 
     const role = user.role;
+    await writeAudit(req, {
+      userId: user._id,
+      action: "auth.register",
+      resourceType: "user",
+      resourceId: String(user._id),
+    });
     sendSuccess(res, req, 201, { 
       success: true, 
       accessToken,

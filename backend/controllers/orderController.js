@@ -32,6 +32,7 @@ import { sendOrderPlacedEmail } from "../services/orderReceiptEmailService.js";
 import { runScheduledOrderAdvancementSweep } from "../services/scheduledOrderService.js";
 import groupOrderSessionModel from "../models/groupOrderSessionModel.js";
 import groupSplitPaymentModel from "../models/groupSplitPaymentModel.js";
+import { ensureEscrowForOrder, cancelEscrowForOrder } from "../services/escrowService.js";
 
 function buildAggregatedStockLines(items) {
   const byFood = new Map();
@@ -855,6 +856,13 @@ const placeOrder = async (req, res) => {
         });
         await payment.save();
 
+        await ensureEscrowForOrder({
+          orderId: newOrder._id,
+          userId: req.body.userId,
+          amount: newOrder.finalAmount,
+          currency: "INR",
+        });
+
         if (!isRz) {
           newOrder.payment.transactionId = transactionId;
           await newOrder.save();
@@ -1378,6 +1386,11 @@ const cancelOrder = async (req, res) => {
     if (result.order.payment?.method === "cash_on_delivery") {
       await orderModel.findByIdAndUpdate(orderId, { "payment.status": "pending" });
     }
+
+    await cancelEscrowForOrder(orderId, {
+      reason: "order_cancelled_by_user",
+      actor: { kind: "user", id: String(req.body.userId) },
+    });
 
     sendSuccess(res, req, 200, { 
       success: true, 

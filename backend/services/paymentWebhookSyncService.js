@@ -1,6 +1,10 @@
 import paymentModel from "../models/paymentModel.js";
 import orderModel from "../models/orderModel.js";
 import { sendPaymentReceiptEmailIfNeeded } from "./orderReceiptEmailService.js";
+import {
+  ensureEscrowForOrder,
+  onEscrowPaymentCaptured,
+} from "./escrowService.js";
 
 /**
  * Apply provider-reported status to our Payment + Order (used by webhooks and tests).
@@ -35,6 +39,18 @@ export async function applyPaymentProviderStatus(payment, { status, transactionI
 
   await payment.save();
   if (status === "success") {
+    await ensureEscrowForOrder({
+      orderId: payment.orderId,
+      userId: payment.userId,
+      amount: payment.amount,
+      currency: payment.currency || "INR",
+    });
+    await onEscrowPaymentCaptured({
+      orderId: payment.orderId,
+      razorpayOrderId: providerPaymentId || payment.providerPaymentId,
+      razorpayPaymentId: transactionId || payment.transactionId,
+      actor: { kind: "system", id: "webhook" },
+    });
     void sendPaymentReceiptEmailIfNeeded(payment._id).catch((e) =>
       console.error("payment receipt email (webhook):", e)
     );

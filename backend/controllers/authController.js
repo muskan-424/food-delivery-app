@@ -13,6 +13,7 @@ import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 import { send2FASetupEmail } from "../utils/emailService.js";
 import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import { writeAudit } from "../services/auditService.js";
 
 // Request password reset
 const requestPasswordReset = async (req, res) => {
@@ -46,6 +47,13 @@ const requestPasswordReset = async (req, res) => {
 
     // Send reset email
     await sendPasswordResetEmail(user.email, resetToken);
+
+    await writeAudit(req, {
+      userId: user._id,
+      action: "auth.password_reset_request",
+      resourceType: "user",
+      resourceId: String(user._id),
+    });
 
     sendSuccess(res, req, 200, { 
       success: true, 
@@ -108,6 +116,13 @@ const resetPassword = async (req, res) => {
 
     // Revoke all existing sessions (force re-login)
     await revokeAllUserTokens(user._id);
+
+    await writeAudit(req, {
+      userId: user._id,
+      action: "auth.password_reset_complete",
+      resourceType: "user",
+      resourceId: String(user._id),
+    });
 
     sendSuccess(res, req, 200, { success: true, message: "Password reset successfully" });
   } catch (error) {

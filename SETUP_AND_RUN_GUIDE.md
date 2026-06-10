@@ -126,7 +126,28 @@ PORT=4000
 # REQUEST_LOG_SAMPLE_RATE=0.15
 # Always log requests slower than this many ms (default: 1200)
 # REQUEST_LOG_SLOW_MS=1200
+
+# Tomato × Air-Tasker Wave 1+ feature flags (see backend/docs/STAGING_ENV_MATRIX.md)
+# ENABLE_ESCROW_PAYMENTS=true
+# ENABLE_RAZORPAYX_PAYOUTS=true
+# ENABLE_USER_KYC=true
+# ENABLE_AI_AGENT=true
+# ENABLE_ORDER_REQUEST_DRAFTS=true
+# USE_MOCK_AGENT=true
 ```
+
+### Database migrations (Phase W)
+
+After `MONGO_URL` is set, apply versioned schema migrations:
+
+```bash
+cd backend
+npm run migrate:status   # list applied / pending
+npm run migrate:up       # apply pending migrations
+npm run migrate:down     # roll back the last migration only
+```
+
+Migrations live in `backend/migrations/` (indexes + safe field backfills). Staging checklist: `backend/docs/STAGING_ENV_MATRIX.md`, ops runbook: `backend/docs/OPS_RUNBOOK.md`.
 
 **Recommended production starting values (adjust after traffic review):**
 

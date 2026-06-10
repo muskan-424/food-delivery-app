@@ -68,6 +68,13 @@ const disputeSchema = new mongoose.Schema(
       default: "normal",
     },
     resolution: { type: String, default: "" },
+    /** Phase O: release funds to restaurant | refund customer | none */
+    financialOutcome: {
+      type: String,
+      enum: ["none", "release", "refund", ""],
+      default: "",
+    },
+    refundAmountInr: { type: Number, default: null },
     internalNotes: { type: [internalNoteSchema], default: [] },
     statusHistory: { type: [statusHistorySchema], default: [] },
     customerReplies: { type: [customerReplySchema], default: [] },

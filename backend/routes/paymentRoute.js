@@ -17,6 +17,12 @@ import {
   exportPaymentReconciliationDailyCsv,
   exportPaymentReconciliationIssuesCsv,
 } from "../controllers/paymentController.js";
+import {
+  registerRazorpayPayoutBank,
+  getRazorpayPayoutStatus,
+  adminInitiateEscrowPayout,
+  adminOverrideEscrowPayoutFraud,
+} from "../controllers/escrowPayoutController.js";
 import authMiddleware from "../middleware/auth.js";
 import adminMiddleware from "../middleware/adminMiddleware.js";
 import { apiLimiter } from "../middleware/rateLimiter.js";
@@ -50,6 +56,32 @@ paymentRouter.post(
   validateRazorpayVerifyPayment,
   paymentIdempotency,
   verifyRazorpayPayment
+);
+paymentRouter.post(
+  "/razorpay/payout/register-bank",
+  apiLimiter,
+  authMiddleware,
+  registerRazorpayPayoutBank
+);
+paymentRouter.get(
+  "/razorpay/payout/status",
+  apiLimiter,
+  authMiddleware,
+  getRazorpayPayoutStatus
+);
+paymentRouter.post(
+  "/razorpay/payout/initiate-escrow",
+  apiLimiter,
+  authMiddleware,
+  adminMiddleware,
+  adminInitiateEscrowPayout
+);
+paymentRouter.post(
+  "/razorpay/payout/override-fraud-block",
+  apiLimiter,
+  authMiddleware,
+  adminMiddleware,
+  adminOverrideEscrowPayoutFraud
 );
 paymentRouter.post("/create", apiLimiter, authMiddleware, paymentIdempotency, createPayment);
 paymentRouter.post("/process/:paymentId", apiLimiter, authMiddleware, paymentIdempotency, processPayment);

@@ -4,6 +4,12 @@ import orderModel from "../models/orderModel.js";
 import paymentModel from "../models/paymentModel.js";
 import { getPaginationParams, buildPaginationMeta } from "../utils/pagination.js";
 import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import {
+  onDisputeOpened,
+  onDisputeFinancialResolve,
+  listDisputeEvents,
+} from "../services/disputeEscrowService.js";
+import { writeAudit } from "../services/auditService.js";
 
 const DISPUTE_SLA_HOURS = {
   low: Number(process.env.DISPUTE_SLA_HOURS_LOW) > 0 ? Number(process.env.DISPUTE_SLA_HOURS_LOW) : 72,
@@ -115,6 +121,12 @@ export const createDispute = async (req, res) => {
           createdAt: new Date(),
         },
       ],
+    });
+
+    await onDisputeOpened({
+      disputeId: doc._id,
+      orderId: order._id,
+      actor: { kind: "customer", id: String(userId) },
     });
 
     sendSuccess(res, req, 201, {
@@ -282,6 +294,8 @@ export const getDispute = async (req, res) => {
     const payload = doc.toObject();
     if (!isAdmin) {
       delete payload.internalNotes;
+    } else {
+      payload.disputeEvents = await listDisputeEvents(doc._id);
     }
 
     sendSuccess(res, req, 200, { success: true, data: payload });
@@ -295,7 +309,15 @@ export const adminUpdateDispute = async (req, res) => {
   try {
     const { disputeId } = req.params;
     const adminId = req.body.userId;
-    const { status, priority, resolution, internalNote, paymentId } = req.body;
+    const {
+      status,
+      priority,
+      resolution,
+      internalNote,
+      paymentId,
+      financialOutcome,
+      refundAmountInr,
+    } = req.body;
 
     const doc = await disputeModel.findById(disputeId);
     if (!doc) {
@@ -373,9 +395,44 @@ export const adminUpdateDispute = async (req, res) => {
       }
     }
 
+    if (financialOutcome != null) {
+      const fo = String(financialOutcome || "none").toLowerCase();
+      if (!["none", "release", "refund", ""].includes(fo)) {
+        return sendError(res, req, 400, "financialOutcome must be none, release, or refund");
+      }
+      if (fo) doc.financialOutcome = fo;
+    }
+    if (refundAmountInr != null) {
+      const amt = Number(refundAmountInr);
+      if (Number.isFinite(amt) && amt >= 0) doc.refundAmountInr = amt;
+    }
+
     await doc.save();
 
-    sendSuccess(res, req, 200, { success: true, message: "Dispute updated", data: doc });
+    if (status === "resolved" && doc.financialOutcome && doc.financialOutcome !== "none") {
+      const moneyResult = await onDisputeFinancialResolve({
+        disputeId: doc._id,
+        orderId: doc.orderId,
+        financialOutcome: doc.financialOutcome,
+        refundAmountInr: doc.refundAmountInr,
+        actor: { kind: "admin", id: String(adminId) },
+      });
+      await writeAudit(req, {
+        userId: adminId,
+        action: "dispute.financial_resolve",
+        resourceType: "dispute",
+        resourceId: String(doc._id),
+        meta: { financialOutcome: doc.financialOutcome, moneyResult },
+      });
+    }
+
+    const events = await listDisputeEvents(doc._id);
+
+    sendSuccess(res, req, 200, {
+      success: true,
+      message: "Dispute updated",
+      data: { ...doc.toObject(), disputeEvents: events },
+    });
   } catch (err) {
     console.error("adminUpdateDispute:", err);
     sendError(res, req, 500, "Error updating dispute");

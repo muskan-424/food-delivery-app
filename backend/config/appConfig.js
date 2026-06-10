@@ -288,4 +288,161 @@ export const appConfig = {
     if (!Number.isFinite(v) || v < 30) return 900;
     return Math.min(86400, Math.floor(v));
   },
+
+  /** Tomato × Air-Tasker Wave 1: hold funds until delivery verified */
+  get enableEscrowPayments() {
+    return process.env.ENABLE_ESCROW_PAYMENTS === "true";
+  },
+
+  /** RazorpayX automated payouts to restaurants/drivers */
+  get enableRazorpayxPayouts() {
+    return process.env.ENABLE_RAZORPAYX_PAYOUTS === "true";
+  },
+
+  /** User-level KYC (drivers, restaurant owners) */
+  get enableUserKyc() {
+    return process.env.ENABLE_USER_KYC === "true";
+  },
+
+  /** Block payout registration until user KYC verified */
+  get kycRequiredForPayout() {
+    return process.env.KYC_REQUIRED_FOR_PAYOUT === "true";
+  },
+
+  /** Email OTP verification for account trust */
+  get enableEmailOtp() {
+    return process.env.ENABLE_EMAIL_OTP !== "false";
+  },
+
+  /** AI agent + RAG support (Phase R) */
+  get enableAiAgent() {
+    return process.env.ENABLE_AI_AGENT === "true";
+  },
+
+  /** Use rule-based agent when true or when GEMINI_API_KEY is missing */
+  get useMockAgent() {
+    return process.env.USE_MOCK_AGENT !== "false";
+  },
+
+  get agentConfidenceThreshold() {
+    const v = Number(process.env.AGENT_CONFIDENCE_THRESHOLD);
+    if (!Number.isFinite(v) || v <= 0) return 0.65;
+    return Math.min(0.99, v);
+  },
+
+  get lowConfidenceAppendNote() {
+    return process.env.AGENT_LOW_CONFIDENCE_NOTE !== "false";
+  },
+
+  get skipGeminiOnLowConfidence() {
+    return process.env.AGENT_SKIP_GEMINI_ON_LOW_CONF !== "false";
+  },
+
+  /** Optional Pinecone vector RAG (requires PINECONE_API_KEY + PINECONE_INDEX) */
+  get enablePineconeRag() {
+    return process.env.ENABLE_PINECONE_RAG === "true";
+  },
+
+  /** Phase S: AI-assisted custom / catering order request drafts */
+  get enableOrderRequestDrafts() {
+    return process.env.ENABLE_ORDER_REQUEST_DRAFTS === "true";
+  },
+
+  /** Phase T: voice transcribe endpoint */
+  get enableVoiceAssist() {
+    return process.env.ENABLE_VOICE_ASSIST === "true";
+  },
+
+  get voiceAllowMockText() {
+    return process.env.VOICE_ALLOW_MOCK_TEXT !== "false";
+  },
+
+  /** Order-scoped customer ↔ restaurant/driver chat (Phase Q) */
+  get enableOrderChat() {
+    return process.env.ENABLE_ORDER_CHAT !== "false";
+  },
+
+  /** Phase Y: pre-payout fraud rule engine */
+  get enablePayoutFraudRules() {
+    return process.env.ENABLE_PAYOUT_FRAUD_RULES !== "false";
+  },
+
+  get payoutFraudBlockOnOpenDispute() {
+    return process.env.PAYOUT_FRAUD_BLOCK_OPEN_DISPUTE !== "false";
+  },
+
+  get payoutFraudBlockOnChargebackFlag() {
+    return process.env.PAYOUT_FRAUD_BLOCK_CHARGEBACK !== "false";
+  },
+
+  get payoutFraudBlockOnCustomerBlocked() {
+    return process.env.PAYOUT_FRAUD_BLOCK_CUSTOMER_BLOCKED !== "false";
+  },
+
+  get payoutFraudBlockOnHighWarnings() {
+    return process.env.PAYOUT_FRAUD_BLOCK_HIGH_WARNINGS !== "false";
+  },
+
+  get payoutFraudHighWarningsThreshold() {
+    const v = Number(process.env.PAYOUT_FRAUD_WARNINGS_THRESHOLD);
+    if (!Number.isFinite(v) || v < 1) return 2;
+    return Math.min(3, Math.floor(v));
+  },
+
+  get payoutFraudBlockOnChargebackSegment() {
+    return process.env.PAYOUT_FRAUD_BLOCK_CHARGEBACK_SEGMENT !== "false";
+  },
+
+  get payoutFraudBlockOnPayoutVelocity() {
+    return process.env.PAYOUT_FRAUD_BLOCK_VELOCITY !== "false";
+  },
+
+  get payoutFraudMaxPayoutsPerUserPerHour() {
+    const v = Number(process.env.PAYOUT_FRAUD_MAX_PAYOUTS_PER_USER_HOUR);
+    if (!Number.isFinite(v) || v < 1) return 5;
+    return Math.min(50, Math.floor(v));
+  },
+
+  /** OTP validity in seconds */
+  get otpTtlSeconds() {
+    const v = Number(process.env.OTP_TTL_SECONDS);
+    if (!Number.isFinite(v) || v < 60) return 600;
+    return Math.min(3600, Math.floor(v));
+  },
+
+  /** Max failed OTP verify attempts per challenge */
+  get otpMaxAttempts() {
+    const v = Number(process.env.OTP_MAX_ATTEMPTS);
+    if (!Number.isFinite(v) || v < 1) return 5;
+    return Math.min(10, Math.floor(v));
+  },
+
+  /** Min seconds between OTP requests for same user/purpose */
+  get otpResendCooldownSeconds() {
+    const v = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS);
+    if (!Number.isFinite(v) || v < 30) return 60;
+    return Math.min(600, Math.floor(v));
+  },
+
+  /** Local dev: log OTP to console when SMTP is not configured */
+  get otpDevLogWhenNoSmtp() {
+    return process.env.OTP_DEV_LOG_WHEN_NO_SMTP !== "false";
+  },
+
+  /** KYC stub auto-verify in development */
+  get kycStubAutoVerify() {
+    return process.env.KYC_STUB_AUTO_VERIFY === "true";
+  },
+
+  /** RazorpayX source account for payouts */
+  get razorpayPayoutAccountNumber() {
+    return String(process.env.RAZORPAY_PAYOUT_ACCOUNT_NUMBER || "").trim();
+  },
+
+  /** KYC provider: stub | signzy */
+  get kycProvider() {
+    const v = String(process.env.KYC_PROVIDER || "stub").trim().toLowerCase();
+    if (v === "signzy") return "signzy";
+    return "stub";
+  },
 };

@@ -21,6 +21,14 @@ import {
   buildExtendedReconciliationPayload,
   buildReconciliationIssuesCsvRows,
 } from "../services/paymentReconciliationService.js";
+import {
+  ensureEscrowForOrder,
+  getEscrowByOrderId,
+  onEscrowPaymentCaptured,
+  recordEscrowRefundInitiated,
+  aggregateEscrowByDay,
+  getEscrowMetricsSummary,
+} from "../services/escrowService.js";
 
 function normalizeClientIdempotencyKey(req) {
   const fromBody = (req.body?.clientIdempotencyKey || "").trim();
@@ -543,6 +551,12 @@ const processRefund = async (req, res) => {
       });
     }
 
+    await recordEscrowRefundInitiated(payment.orderId, {
+      refundAmount: refundAmt,
+      refundId: providerRefundReference,
+      actor: { kind: "admin", id: String(req.body.userId || "") },
+    });
+
     sendSuccess(res, req, 200, {
       success: true,
       message: "Refund processed successfully",
@@ -729,6 +743,11 @@ const getPaymentReconciliationDaily = async (req, res) => {
       depth = await buildExtendedReconciliationPayload(from, to);
     }
 
+    const [escrowByDay, escrowTotals] = await Promise.all([
+      aggregateEscrowByDay(from, to),
+      getEscrowMetricsSummary(),
+    ]);
+
     return sendSuccess(res, req, 200, {
       success: true,
       data: {
@@ -743,6 +762,16 @@ const getPaymentReconciliationDaily = async (req, res) => {
           ...r,
           _id: undefined,
         })),
+        escrow: {
+          enabled: appConfig.enableEscrowPayments,
+          totals: escrowTotals.byStatus,
+          byDay: escrowByDay.map((r) => ({
+            day: r._id.day,
+            status: r._id.status,
+            count: r.count,
+            amount: Math.round(r.amount * 100) / 100,
+          })),
+        },
         ...(depth ? { depth } : {}),
       },
     });
@@ -1198,12 +1227,14 @@ const createRazorpayCheckoutOrder = async (req, res) => {
       return sendError(res, req, 400, "Invalid payment amount");
     }
 
+    const escrow = await getEscrowByOrderId(order._id);
     const rzOrder = await createRazorpayOrder({
       amountPaise,
       receipt: String(payment.orderNumber || "order").slice(0, 40),
       notes: {
         mongoOrderId: String(order._id),
         mongoPaymentId: String(payment._id),
+        ...(escrow ? { escrowId: String(escrow._id) } : {}),
       },
     });
 
@@ -1318,6 +1349,19 @@ const verifyRazorpayPayment = async (req, res) => {
     payment.providerPaymentId = razorpayOrderId;
     payment.paidAt = new Date();
     await payment.save();
+
+    await ensureEscrowForOrder({
+      orderId: payment.orderId,
+      userId: payment.userId,
+      amount: payment.amount,
+      currency: payment.currency || "INR",
+    });
+    await onEscrowPaymentCaptured({
+      orderId: payment.orderId,
+      razorpayOrderId,
+      razorpayPaymentId,
+      actor: { kind: "user", id: String(userId) },
+    });
 
     const order = await orderModel.findById(payment.orderId);
     if (order) {

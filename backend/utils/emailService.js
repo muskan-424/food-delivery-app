@@ -140,6 +140,32 @@ const defaultFrom = () =>
 /**
  * Generic HTML email (order receipts, etc.). No-op if SMTP is not configured.
  */
+export async function sendVerificationOtpEmail(email, code, purpose = "EMAIL_VERIFICATION") {
+  const ttlMin = Math.max(1, Math.floor((Number(process.env.OTP_TTL_SECONDS) || 600) / 60));
+  const subject =
+    purpose === "SENSITIVE_ACTION"
+      ? "Your security verification code"
+      : "Verify your email address";
+  const intro =
+    purpose === "SENSITIVE_ACTION"
+      ? "Use this code to confirm a sensitive action on your account:"
+      : "Use this code to verify your email address:";
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>${subject}</h2>
+      <p>${intro}</p>
+      <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; font-family: monospace;">${code}</p>
+      <p>This code expires in <strong>${ttlMin} minutes</strong>.</p>
+      <p>If you did not request this, you can ignore this email.</p>
+      <hr>
+      <p style="color: #666; font-size: 12px;">Automated message — do not reply.</p>
+    </div>
+  `;
+
+  return sendHtmlEmail({ to: email, subject, html });
+}
+
 export async function sendHtmlEmail({ to, subject, html }) {
   const addr = String(to || "").trim();
   if (!addr) {

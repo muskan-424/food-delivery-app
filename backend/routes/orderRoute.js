@@ -7,6 +7,11 @@ import { validateOrder, validateStatusUpdate, validateVerifyOrder } from "../mid
 import { orderLimiter, apiLimiter } from "../middleware/rateLimiter.js";
 import idempotencyMiddleware from "../middleware/idempotencyMiddleware.js";
 import { getOrderTracking, getOrderTimeline } from "../controllers/orderTrackingController.js";
+import {
+  verifyOrderDelivery,
+  previewOrderDeliveryVerification,
+} from "../controllers/deliveryVerificationController.js";
+import { getOrderEvidence } from "../controllers/orderEvidenceController.js";
 import { orderPlacementVelocityGuard } from "../middleware/velocityGuard.js";
 import {
   createGroupOrderSession,
@@ -19,6 +24,7 @@ import {
   getMyGroupSplitShare,
   initializeGroupSplitPayments,
   markMyGroupSplitPaid,
+  verifyMyGroupSplitRazorpay,
   getGroupSplitPaymentsSummary,
 } from "../controllers/groupOrderController.js";
 
@@ -87,8 +93,27 @@ orderRouter.get(
 );
 orderRouter.get("/group/:sessionId/my-share", apiLimiter, authMiddleware, getMyGroupSplitShare);
 orderRouter.post("/group/:sessionId/my-share/pay", apiLimiter, authMiddleware, markMyGroupSplitPaid);
+orderRouter.post(
+  "/group/:sessionId/my-share/razorpay/verify",
+  apiLimiter,
+  authMiddleware,
+  verifyMyGroupSplitRazorpay
+);
 orderRouter.post("/group/:sessionId/close", apiLimiter, authMiddleware, closeGroupOrderSession);
 orderRouter.get("/:orderId/tracking", apiLimiter, authMiddleware, getOrderTracking);
 orderRouter.get("/:orderId/timeline", apiLimiter, authMiddleware, getOrderTimeline);
+orderRouter.post(
+  "/:orderId/verify-delivery",
+  apiLimiter,
+  authMiddleware,
+  verifyOrderDelivery
+);
+orderRouter.get(
+  "/:orderId/verify-delivery/preview",
+  apiLimiter,
+  authMiddleware,
+  previewOrderDeliveryVerification
+);
+orderRouter.get("/:orderId/evidence", apiLimiter, authMiddleware, getOrderEvidence);
 
 export default orderRouter;

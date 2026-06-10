@@ -18,6 +18,9 @@ const groupSplitPaymentSchema = new mongoose.Schema(
       index: true,
     },
     transactionId: { type: String, default: "", index: true },
+    razorpayOrderId: { type: String, default: "", index: true },
+    razorpayPaymentId: { type: String, default: "" },
+    paymentMethod: { type: String, default: "" },
     paidAt: { type: Date, default: null },
   },
   { timestamps: true }

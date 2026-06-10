@@ -1,0 +1,59 @@
+.order-evidence-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.order-evidence-muted,
+.order-evidence-error {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.order-evidence-muted {
+  color: #888;
+}
+
+.order-evidence-error {
+  color: #c62828;
+}
+
+.order-evidence-meta {
+  margin: 6px 0 0;
+  color: #666;
+}
+
+.order-evidence-note,
+.order-evidence-sig,
+.order-evidence-verify {
+  margin: 8px 0 0;
+  color: #444;
+}
+
+.order-evidence-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.order-evidence-images figure {
+  margin: 0;
+  max-width: 160px;
+}
+
+.order-evidence-images figcaption {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.order-evidence-images img {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  object-fit: cover;
+}

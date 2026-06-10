@@ -157,6 +157,14 @@ const Navbar = ({ setShowLogin }) => {
                 <li onClick={()=>navigate("/payments")}><span className="dropdown-icon">💳</span><p>Payment History</p></li>
                 <li onClick={()=>navigate("/profile")}><img src={assets.profile_icon} alt="" /><p>Profile</p></li>
                 <li onClick={()=>navigate("/wishlist")}><span className="dropdown-icon">🤍</span><p>Wishlist</p></li>
+                <li onClick={() => navigate("/notifications")}>
+                  <span className="dropdown-icon">🔔</span>
+                  <p>Notifications</p>
+                </li>
+                <li onClick={() => navigate("/chat")}>
+                  <span className="dropdown-icon">✨</span>
+                  <p>AI Assistant</p>
+                </li>
                 <li onClick={()=>navigate("/support")}><span className="dropdown-icon">💬</span><p>Support</p></li>
                 {partnerAccessResolved && partnerPayoutAccess ? (
                   <li onClick={() => navigate("/partner/payouts")}>

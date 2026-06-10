@@ -18,6 +18,8 @@ import PartnerPayouts from "./pages/PartnerPayouts/PartnerPayouts";
 import MyDisputes from "./pages/MyDisputes/MyDisputes";
 import PartnerKyc from "./pages/PartnerKyc/PartnerKyc";
 import GroupOrders from "./pages/GroupOrders/GroupOrders";
+import Notifications from "./pages/Notifications/Notifications";
+import Chat from "./pages/Chat/Chat";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import ExperimentDebugBadge from "./components/ExperimentDebugBadge/ExperimentDebugBadge";
 
@@ -43,6 +45,8 @@ const App = () => {
           <Route path="/partner/kyc" element={<PartnerKyc />} />
           <Route path="/group-orders" element={<GroupOrders />} />
           <Route path="/my-disputes" element={<MyDisputes />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/chat" element={<Chat />} />
         </Routes>
         <ExperimentDebugBadge />
       </div>

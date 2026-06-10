@@ -1,0 +1,23 @@
+# Production overlay — use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+
+services:
+  backend:
+    env_file: []
+    environment:
+      - NODE_ENV=production
+      - ENABLE_SCHEDULED_JOBS=${ENABLE_SCHEDULED_JOBS:-true}
+      - ENABLE_JOB_QUEUE=${ENABLE_JOB_QUEUE:-true}
+      - BETA_MODE_ENABLED=${BETA_MODE_ENABLED:-false}
+    restart: always
+
+  frontend:
+    restart: always
+
+  admin:
+    restart: always
+
+  mongodb:
+    restart: always
+
+  redis:
+    restart: always

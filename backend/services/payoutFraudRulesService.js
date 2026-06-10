@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import orderEscrowModel from "../models/orderEscrowModel.js";
 import disputeModel from "../models/disputeModel.js";
 import userModel from "../models/userModel.js";
@@ -63,7 +64,7 @@ export async function collectPayoutFraudSignals(order, escrow) {
       })
       .select("_id")
       .lean(),
-    customerUserId
+    customerUserId && mongoose.isValidObjectId(customerUserId)
       ? userModel
           .findById(customerUserId)
           .select("isBlocked warnings segmentTags chargebackFlag")

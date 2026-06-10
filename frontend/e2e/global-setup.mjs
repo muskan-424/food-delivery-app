@@ -43,6 +43,10 @@ export function e2eBackendEnv() {
     USE_MOCK_AGENT: "true",
     ENABLE_ORDER_CHAT: "true",
     ENABLE_EMAIL_OTP: "false",
+    ENCRYPTION_KEY:
+      process.env.ENCRYPTION_KEY ||
+      fileEnv.ENCRYPTION_KEY ||
+      "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
   };
 }
 

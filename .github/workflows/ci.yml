@@ -137,6 +137,7 @@ jobs:
       MONGO_URL: mongodb://127.0.0.1:27017/food-delivery-e2e
       JWT_SECRET: ci-e2e-secret-do-not-use-in-production
       JWT_REFRESH_SECRET: ci-e2e-refresh-secret
+      ENCRYPTION_KEY: a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
       PLAYWRIGHT_API_PORT: "4000"
       PLAYWRIGHT_WEB_PORT: "5173"
     steps:

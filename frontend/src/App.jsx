@@ -20,6 +20,8 @@ import PartnerKyc from "./pages/PartnerKyc/PartnerKyc";
 import GroupOrders from "./pages/GroupOrders/GroupOrders";
 import Notifications from "./pages/Notifications/Notifications";
 import Chat from "./pages/Chat/Chat";
+import BetaFeedback from "./pages/BetaFeedback/BetaFeedback";
+import BetaBanner from "./components/BetaBanner/BetaBanner";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import ExperimentDebugBadge from "./components/ExperimentDebugBadge/ExperimentDebugBadge";
 
@@ -30,6 +32,7 @@ const App = () => {
       {showLogin ? <LoginPopup setShowLogin={setShowLogin} /> : <></>}
       <div className="app">
         <ToastContainer />
+        <BetaBanner />
         <Navbar setShowLogin={setShowLogin} />
         <Routes>
           <Route path="/" element={<Home />} />
@@ -47,6 +50,7 @@ const App = () => {
           <Route path="/my-disputes" element={<MyDisputes />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/feedback" element={<BetaFeedback />} />
         </Routes>
         <ExperimentDebugBadge />
       </div>

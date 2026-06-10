@@ -1,0 +1,44 @@
+# Grafana + Prometheus stack
+#
+# From repo root (backend must be reachable — start docker compose first):
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d
+#
+# Grafana:    http://localhost:3030  (admin / admin unless GRAFANA_ADMIN_PASSWORD set)
+# Prometheus: http://localhost:9090
+# API metrics: http://localhost:4000/api/health/metrics
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: [observability]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - food-delivery-network
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: [observability]
+    ports:
+      - "3030:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - food-delivery-network

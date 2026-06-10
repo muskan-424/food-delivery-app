@@ -19,6 +19,7 @@
     "e2e:money-loop": "node scripts/e2e-money-loop.js",
     "smoke:load": "node scripts/smoke_load.js",
     "smoke:staging": "node scripts/staging_smoke.js",
+    "go-live:watch": "node ../scripts/go_live_watch.js",
     "reset-password": "node scripts/resetUserPassword.js",
     "purge-test-users": "node scripts/purgeTestUsers.js"
   },

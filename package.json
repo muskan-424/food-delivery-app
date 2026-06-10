@@ -20,6 +20,9 @@
     "smoke:staging": "npm run smoke:staging --prefix backend",
     "smoke:load": "npm run smoke:load --prefix backend",
     "test:e2e": "npm run test:e2e --prefix frontend",
+    "go-live:watch": "node scripts/go_live_watch.js",
+    "rollback:drill": "node scripts/rollback_drill.js",
+    "dev:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build",
     "migrate:status": "npm run migrate:status --prefix backend",
     "dev:all": "concurrently -n api,web,admin -c blue,green,magenta \"docker compose up --build\" \"npm run dev --prefix frontend\" \"npm run dev --prefix admin\""
   },

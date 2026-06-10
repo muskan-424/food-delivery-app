@@ -10,8 +10,20 @@ import { getLastDataRetentionRun, getRetentionPolicies } from "../utils/dataRete
 import { getRequestMetricsSnapshot } from "../middleware/activityLogger.js";
 import { getAnalyticsRuntimeStats } from "../services/analyticsEventService.js";
 import { getObjectStorageStats } from "../utils/mediaStorage.js";
+import { getCapabilitiesSnapshot } from "../services/capabilitiesService.js";
+import {
+  getEscrowMetricsSummary,
+  getPaymentOpsMetricsSummary,
+} from "../services/opsMetricsService.js";
 
 const router = express.Router();
+
+router.get("/capabilities", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    data: getCapabilitiesSnapshot(),
+  });
+});
 
 router.get("/scheduling-config", (req, res) => {
   const queueActive = !!getGeneralQueue();
@@ -85,6 +97,32 @@ router.get("/ops", async (req, res) => {
   const queueRuntime = await getQueueRuntimeStats();
   const m = process.memoryUsage();
   const load = process.cpuUsage();
+
+  let opsMetrics = null;
+  if (mongoOk) {
+    try {
+      const [escrow, payments] = await Promise.all([
+        getEscrowMetricsSummary(),
+        getPaymentOpsMetricsSummary(),
+      ]);
+      opsMetrics = {
+        escrow: {
+          enabled: escrow.enabled,
+          total: escrow.total,
+          pendingRelease: escrow.pipeline?.pendingRelease ?? 0,
+          disputeOpened: escrow.pipeline?.disputeOpened ?? 0,
+        },
+        payments: {
+          pendingCount: payments.payments?.pendingCount ?? 0,
+          webhookLagMinutes: payments.webhooks?.lagMinutes ?? null,
+          reconciliationDrift: payments.reconciliation?.webhookVsPaymentDrift ?? 0,
+        },
+      };
+    } catch (err) {
+      opsMetrics = { error: err?.message || "metrics_unavailable" };
+    }
+  }
+
   return res.status(200).json({
     success: true,
     health: {
@@ -122,6 +160,7 @@ router.get("/ops", async (req, res) => {
     },
     analytics: getAnalyticsRuntimeStats(),
     objectStorage: getObjectStorageStats(),
+    opsMetrics,
   });
 });
 

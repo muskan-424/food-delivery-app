@@ -14,6 +14,15 @@ function userRoom(userId) {
   return `user:${String(userId)}`;
 }
 
+export function orderRoom(orderId) {
+  return `order:${String(orderId)}`;
+}
+
+export function broadcastToOrderRoom(orderId, eventName, payload) {
+  if (!io) return;
+  io.to(orderRoom(orderId)).emit(eventName, payload);
+}
+
 export async function initWebsocketServer(httpServer) {
   if (!appConfig.enableWebsocket) {
     return null;
@@ -55,6 +64,38 @@ export async function initWebsocketServer(httpServer) {
     const uid = socket.data.userId;
     socket.join(userRoom(uid));
     socket.emit("connected", { userId: uid, at: new Date().toISOString() });
+
+    socket.on("order:join", async (data, ack) => {
+      try {
+        const orderId = String(data?.orderId || "").trim();
+        if (!orderId) {
+          if (typeof ack === "function") ack({ ok: false, reason: "order_id_required" });
+          return;
+        }
+        const { canAccessOrderChat } = await import("../services/orderChatService.js");
+        const userModel = (await import("../models/userModel.js")).default;
+        const user = await userModel.findById(uid).select("role");
+        const access = await canAccessOrderChat(uid, orderId, {
+          isAdmin: user?.role === "admin",
+        });
+        if (!access.ok) {
+          if (typeof ack === "function") ack({ ok: false, reason: access.reason || "forbidden" });
+          return;
+        }
+        socket.join(orderRoom(orderId));
+        if (typeof ack === "function") {
+          ack({ ok: true, room: orderRoom(orderId), role: access.role });
+        }
+      } catch (err) {
+        console.error("[ws] order:join:", err?.message || err);
+        if (typeof ack === "function") ack({ ok: false, reason: "error" });
+      }
+    });
+
+    socket.on("order:leave", (data) => {
+      const orderId = String(data?.orderId || "").trim();
+      if (orderId) socket.leave(orderRoom(orderId));
+    });
   });
 
   return io;

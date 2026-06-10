@@ -3,6 +3,10 @@ import userModel from "../models/userModel.js";
 import { deliveryAssignmentModel, deliveryPersonModel } from "../models/deliveryModel.js";
 import { transitionOrderById } from "../services/orderTransitionService.js";
 import orderEventModel from "../models/orderEventModel.js";
+import {
+  getEscrowByOrderId,
+  listEscrowEventsByOrderId,
+} from "../services/escrowService.js";
 import { sendSuccess, sendError } from "../utils/apiResponse.js";
 import { getMediaPublicUrl } from "../utils/mediaStorage.js";
 
@@ -220,12 +224,28 @@ const getOrderTimeline = async (req, res) => {
 
     const scheduleMeta = buildScheduleMeta(order);
 
+    const [escrow, escrowEvents] = await Promise.all([
+      getEscrowByOrderId(orderId),
+      listEscrowEventsByOrderId(orderId),
+    ]);
+
     sendSuccess(res, req, 200, {
       success: true,
       data: {
         currentStatus: order.status,
         timeline: order.statusHistory || [],
         events,
+        escrow: escrow
+          ? {
+              id: escrow._id,
+              status: escrow.status,
+              amount: escrow.amount,
+              currency: escrow.currency,
+              capturedAt: escrow.capturedAt,
+              releasedAt: escrow.releasedAt,
+            }
+          : null,
+        escrowEvents,
         createdAt: order.createdAt,
         estimatedDeliveryTime: order.estimatedDeliveryTime,
         deliveredAt: order.deliveredAt,

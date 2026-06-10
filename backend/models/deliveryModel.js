@@ -67,6 +67,8 @@ const deliveryAssignmentSchema = new mongoose.Schema({
   /** Phase 9: pending POD media uploaded directly to object storage */
   pendingPodEvidence: {
     key: { type: String, default: "" },
+    beforeKey: { type: String, default: "" },
+    afterKey: { type: String, default: "" },
     uploadedAt: { type: Date, default: null },
   },
 });

@@ -7,6 +7,10 @@ import { sendSmsMessage } from "../utils/smsService.js";
 import { sendPushNotification } from "../utils/pushService.js";
 import { renderNotificationTemplates } from "../services/notificationTemplateService.js";
 import {
+  isChannelEnabled,
+  mapNotificationTypeToCategory,
+} from "../services/notificationPreferenceService.js";
+import {
   getQueueRedis,
   getWorkerRedis,
   closeBullmqConnections,
@@ -92,18 +96,27 @@ export function startJobQueue() {
             const subject = rendered.subject;
             const plainBody = rendered.smsText;
             const html = rendered.emailHtml;
+            const category = mapNotificationTypeToCategory(doc.type);
+            const [emailEnabled, smsEnabled, pushEnabled] = await Promise.all([
+              isChannelEnabled(userId, { category, channel: "email" }),
+              isChannelEnabled(userId, { category, channel: "sms" }),
+              isChannelEnabled(userId, { category, channel: "push" }),
+            ]);
 
             const [emailOk, smsResp] = await Promise.all([
-              user.email ? sendHtmlEmail({ to: user.email, subject, html }) : Promise.resolve(false),
-              user.phone
+              user.email && emailEnabled
+                ? sendHtmlEmail({ to: user.email, subject, html })
+                : Promise.resolve(false),
+              user.phone && smsEnabled
                 ? sendSmsMessage({ toPhone: user.phone, message: `${subject}: ${plainBody}` })
-                : Promise.resolve({ ok: false, reason: "missing_phone", provider: "none" }),
+                : Promise.resolve({ ok: false, reason: "disabled_or_missing_phone", provider: "none" }),
             ]);
-            const pushTokens = Array.isArray(user.pushDevices)
-              ? user.pushDevices
-                  .filter((d) => d?.active !== false && d?.token)
-                  .map((d) => String(d.token))
-              : [];
+            const pushTokens =
+              pushEnabled && Array.isArray(user.pushDevices)
+                ? user.pushDevices
+                    .filter((d) => d?.active !== false && d?.token)
+                    .map((d) => String(d.token))
+                : [];
             const pushResp = await sendPushNotification({
               tokens: pushTokens,
               title: subject,

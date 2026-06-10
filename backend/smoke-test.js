@@ -54,7 +54,7 @@ async function request(method, path, { token, body, expectStatus } = {}) {
   return { status: res.status, json, text };
 }
 
-function runUnitTests() {
+async function runUnitTests() {
   console.log("\n📦 Unit: order status machine");
 
   const forwardChain = [
@@ -90,6 +90,16 @@ function runUnitTests() {
   } else {
     fail("ORDER_STATUSES count", `got ${ORDER_STATUSES.length}`);
   }
+
+  console.log("\n📦 Unit: bank / PAN validation");
+  const { isValidIfsc } = await import("./utils/bankValidation.js");
+  const { isValidPan } = await import("./utils/panValidation.js");
+  if (isValidIfsc("HDFC0001234")) pass("valid IFSC accepted");
+  else fail("valid IFSC accepted");
+  if (!isValidIfsc("INVALID")) pass("invalid IFSC rejected");
+  else fail("invalid IFSC rejected");
+  if (isValidPan("ABCDE1234F")) pass("valid PAN accepted");
+  else fail("valid PAN accepted");
 }
 
 async function runHttpTests() {
@@ -121,6 +131,14 @@ async function runHttpTests() {
     else fail("GET /api/health/scheduling-config");
   } catch (e) {
     fail("GET /api/health/scheduling-config", e.message);
+  }
+
+  try {
+    const caps = await request("GET", "/api/health/capabilities", { expectStatus: 200 });
+    if (caps.json?.success && caps.json?.data?.flags) pass("GET /api/health/capabilities");
+    else fail("GET /api/health/capabilities");
+  } catch (e) {
+    fail("GET /api/health/capabilities", e.message);
   }
 
   try {
@@ -201,6 +219,77 @@ async function runHttpTests() {
     } catch (e) {
       fail("GET /api/notifications/inbox", e.message);
     }
+
+    try {
+      const prefs = await request("GET", "/api/notifications/preferences", {
+        token: userToken,
+        expectStatus: 200,
+      });
+      if (prefs.json?.success && prefs.json?.data?.order_status) {
+        pass("GET /api/notifications/preferences");
+      } else {
+        fail("GET /api/notifications/preferences", prefs.json?.message || "no categories");
+      }
+    } catch (e) {
+      fail("GET /api/notifications/preferences", e.message);
+    }
+
+    try {
+      const putPrefs = await request("PUT", "/api/notifications/preferences", {
+        token: userToken,
+        body: { categories: { promo: { email: false } } },
+        expectStatus: 200,
+      });
+      if (putPrefs.json?.success && putPrefs.json?.data?.promo?.email === false) {
+        pass("PUT /api/notifications/preferences");
+      } else {
+        fail("PUT /api/notifications/preferences", putPrefs.json?.message);
+      }
+    } catch (e) {
+      fail("PUT /api/notifications/preferences", e.message);
+    }
+
+    try {
+      const vstatus = await request("GET", "/api/verification/me", { token: userToken, expectStatus: 200 });
+      if (vstatus.json?.success && vstatus.json?.data) pass("GET /api/verification/me");
+      else fail("GET /api/verification/me", vstatus.json?.message || "no data");
+    } catch (e) {
+      fail("GET /api/verification/me", e.message);
+    }
+
+    try {
+      const otpReq = await request("POST", "/api/verification/email/request-otp", {
+        token: userToken,
+        body: { purpose: "EMAIL_VERIFICATION" },
+        expectStatus: 200,
+      });
+      if (otpReq.json?.success) pass("POST /api/verification/email/request-otp");
+      else fail("POST /api/verification/email/request-otp", otpReq.json?.message);
+    } catch (e) {
+      fail("POST /api/verification/email/request-otp", e.message);
+    }
+
+    try {
+      const kycMe = await request("GET", "/api/kyc/me", { token: userToken, expectStatus: 200 });
+      if (kycMe.json?.success && kycMe.json?.data) pass("GET /api/kyc/me", kycMe.json.data.status || "ok");
+      else fail("GET /api/kyc/me", kycMe.json?.message);
+    } catch (e) {
+      fail("GET /api/kyc/me", e.message);
+    }
+
+    try {
+      const payoutStatus = await request("GET", "/api/payment/razorpay/payout/status", {
+        token: userToken,
+        expectStatus: 200,
+      });
+      if (payoutStatus.json?.success && payoutStatus.json?.data) {
+        pass("GET /api/payment/razorpay/payout/status");
+      } else {
+        fail("GET /api/payment/razorpay/payout/status", payoutStatus.json?.message);
+      }
+    } catch (e) {
+      fail("GET /api/payment/razorpay/payout/status", e.message);
+    }
   }
 
   let adminToken = null;
@@ -245,6 +334,163 @@ async function runHttpTests() {
     } catch (e) {
       fail("GET /api/disputes/admin/summary", e.message);
     }
+
+    try {
+      const audit = await request("GET", "/api/admin/users/audit-logs?limit=5", {
+        token: adminToken,
+        expectStatus: 200,
+      });
+      if (audit.json?.success !== false) pass("GET /api/admin/users/audit-logs");
+      else fail("GET /api/admin/users/audit-logs", audit.json?.message);
+    } catch (e) {
+      fail("GET /api/admin/users/audit-logs", e.message);
+    }
+
+    try {
+      const kycMetrics = await request("GET", "/api/admin/users/metrics/kyc", {
+        token: adminToken,
+        expectStatus: 200,
+      });
+      if (kycMetrics.json?.success && kycMetrics.json?.data?.byStatus) {
+        pass("GET /api/admin/users/metrics/kyc");
+      } else {
+        fail("GET /api/admin/users/metrics/kyc", kycMetrics.json?.message);
+      }
+    } catch (e) {
+      fail("GET /api/admin/users/metrics/kyc", e.message);
+    }
+
+    try {
+      const escrowMetrics = await request("GET", "/api/admin/users/metrics/escrow", {
+        token: adminToken,
+        expectStatus: 200,
+      });
+      if (escrowMetrics.json?.success && escrowMetrics.json?.data?.byStatus) {
+        pass("GET /api/admin/users/metrics/escrow");
+      } else {
+        fail("GET /api/admin/users/metrics/escrow", escrowMetrics.json?.message);
+      }
+    } catch (e) {
+      fail("GET /api/admin/users/metrics/escrow", e.message);
+    }
+
+    try {
+      const payMetrics = await request("GET", "/api/admin/users/metrics/payments", {
+        token: adminToken,
+        expectStatus: 200,
+      });
+      if (payMetrics.json?.success && payMetrics.json?.data?.reconciliation) {
+        pass("GET /api/admin/users/metrics/payments");
+      } else {
+        fail("GET /api/admin/users/metrics/payments", payMetrics.json?.message);
+      }
+    } catch (e) {
+      fail("GET /api/admin/users/metrics/payments", e.message);
+    }
+  }
+
+  if (userToken) {
+    try {
+      const fakeOrderId = "507f1f77bcf86cd799439011";
+      const chatSession = await request("GET", `/api/order-chat/${fakeOrderId}/session`, {
+        token: userToken,
+        expectStatus: 404,
+      });
+      if (chatSession.json?.success === false) pass("GET /api/order-chat/:orderId/session (404)");
+      else fail("GET /api/order-chat/:orderId/session (404)", "expected not found");
+    } catch (e) {
+      fail("GET /api/order-chat/:orderId/session (404)", e.message);
+    }
+
+    try {
+      const caps = await request("GET", "/api/health/capabilities", { expectStatus: 200 });
+      const aiEnabled = caps.json?.data?.flags?.enableAiAgent === true;
+      if (!aiEnabled) {
+        const disabled = await request("POST", "/api/chat/classify", {
+          token: userToken,
+          body: { message: "where is my order" },
+          expectStatus: 503,
+        });
+        if (disabled.json?.success === false) pass("POST /api/chat/classify (disabled 503)");
+        else fail("POST /api/chat/classify (disabled 503)", disabled.json?.message);
+      } else {
+        const classify = await request("POST", "/api/chat/classify", {
+          token: userToken,
+          body: { message: "where is my order" },
+          expectStatus: 200,
+        });
+        if (classify.json?.success && classify.json?.data?.intent === "order_status") {
+          pass("POST /api/chat/classify");
+        } else {
+          fail("POST /api/chat/classify", classify.json?.message || "wrong intent");
+        }
+
+        const agent = await request("POST", "/api/chat/agent", {
+          token: userToken,
+          body: { message: "where is my order" },
+          expectStatus: 200,
+        });
+        if (agent.json?.success && agent.json?.data?.reply) {
+          pass("POST /api/chat/agent", agent.json.data.intent || "");
+        } else {
+          fail("POST /api/chat/agent", agent.json?.message);
+        }
+      }
+    } catch (e) {
+      fail("AI agent smoke", e.message);
+    }
+
+    try {
+      const caps2 = await request("GET", "/api/health/capabilities", { expectStatus: 200 });
+      if (caps2.json?.data?.flags?.enableOrderRequestDrafts) {
+        const draft = await request("POST", "/api/order-requests/drafts", {
+          token: userToken,
+          body: {
+            rawInput:
+              "Party catering for 40 guests vegetarian biryani and desserts budget 12000 delivery 2026-12-20 evening",
+          },
+          expectStatus: 201,
+        });
+        if (draft.json?.success && draft.json?.data?.aiSchema?.eventType) {
+          pass("POST /api/order-requests/drafts", draft.json.data.aiSchema.eventType);
+        } else {
+          fail("POST /api/order-requests/drafts", draft.json?.message);
+        }
+      } else {
+        const off = await request("POST", "/api/order-requests/drafts", {
+          token: userToken,
+          body: { rawInput: "test catering request for party" },
+          expectStatus: 503,
+        });
+        if (off.json?.success === false) pass("POST /api/order-requests/drafts (disabled 503)");
+        else fail("POST /api/order-requests/drafts (disabled 503)", off.json?.message);
+      }
+    } catch (e) {
+      fail("order request drafts smoke", e.message);
+    }
+
+    try {
+      const caps3 = await request("GET", "/api/health/capabilities", { expectStatus: 200 });
+      if (caps3.json?.data?.flags?.enableVoiceAssist) {
+        const voice = await request("POST", "/api/voice/transcribe", {
+          token: userToken,
+          body: { mockText: "search for biryani near me" },
+          expectStatus: 200,
+        });
+        if (voice.json?.success && voice.json?.data?.text) pass("POST /api/voice/transcribe (mockText)");
+        else fail("POST /api/voice/transcribe", voice.json?.message);
+      } else {
+        const off = await request("POST", "/api/voice/transcribe", {
+          token: userToken,
+          body: { mockText: "hello" },
+          expectStatus: 503,
+        });
+        if (off.json?.success === false) pass("POST /api/voice/transcribe (disabled 503)");
+        else fail("POST /api/voice/transcribe (disabled 503)", off.json?.message);
+      }
+    } catch (e) {
+      fail("voice transcribe smoke", e.message);
+    }
   }
 }
 
@@ -256,6 +502,14 @@ async function cleanupSmokeUser(email) {
     const user = await db.collection("users").findOne({ email: email.toLowerCase() });
     if (user) {
       await db.collection("refreshtokens").deleteMany({ userId: user._id });
+      await db.collection("otpchallenges").deleteMany({ userId: user._id });
+      await db.collection("usertrusteddevices").deleteMany({ userId: user._id });
+      await db.collection("auditlogs").deleteMany({ userId: user._id });
+      await db.collection("userkycprofiles").deleteMany({ userId: user._id });
+      await db.collection("notificationpreferences").deleteMany({ userId: user._id });
+      await db.collection("agentchatsessions").deleteMany({ userId: user._id });
+      await db.collection("agentchatmessages").deleteMany({ userId: user._id });
+      await db.collection("orderrequestdrafts").deleteMany({ userId: user._id });
       await db.collection("users").deleteOne({ _id: user._id });
     }
   } catch {
@@ -273,7 +527,7 @@ async function main() {
   console.log("🧪 Food Delivery — Smoke Test Suite");
   console.log("====================================");
 
-  runUnitTests();
+  await runUnitTests();
 
   try {
     await runHttpTests();

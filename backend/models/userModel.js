@@ -35,6 +35,8 @@ const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
+    /** Set when user completes email OTP verification (Tomato × Air-Tasker Wave 1) */
+    emailVerifiedAt: { type: Date, default: null, index: true },
     password: { type: String, required: true },
     phone: { type: String, default: '' },
     profilePicture: { type: String, default: '' },
@@ -64,6 +66,8 @@ const userSchema = new mongoose.Schema(
     blockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
     blockReason: { type: String },
     warnings: { type: Number, default: 0, min: 0, max: 3 },
+    /** Phase Y: block automated escrow payout until cleared by admin */
+    chargebackFlag: { type: Boolean, default: false, index: true },
     warningHistory: [{
       warningNumber: { type: Number },
       reason: { type: String, required: true },
@@ -92,6 +96,15 @@ const userSchema = new mongoose.Schema(
     dataExportRequestedAt: { type: Date },
     dataDeletionRequested: { type: Boolean, default: false },
     dataDeletionRequestedAt: { type: Date },
+    /** RazorpayX payout registration (Phase J) */
+    razorpayContactId: { type: String, default: "" },
+    razorpayFundAccountId: { type: String, default: "" },
+    razorpayPayoutBank: {
+      beneficiaryName: { type: String, default: "" },
+      ifsc: { type: String, default: "" },
+      accountLast4: { type: String, default: "" },
+      registeredAt: { type: Date, default: null },
+    },
     // Admin creation tracking
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'user' }, // For tracking who created admin accounts
     ipAddress: { type: String }, // IP address during registration

@@ -167,9 +167,25 @@ const orderSchema = new mongoose.Schema({
       default: "none",
     },
     verifiedAt: { type: Date },
+    uploadedAt: { type: Date, default: null },
     note: { type: String, default: "" },
     evidenceUrl: { type: String, default: "" },
+    beforeImageUrl: { type: String, default: "" },
+    afterImageUrl: { type: String, default: "" },
+    evidenceJson: { type: mongoose.Schema.Types.Mixed, default: null },
     signatureName: { type: String, default: "" },
+  },
+  /** Rule-based delivery verification for escrow release (Phase M) */
+  deliveryVerificationResult: {
+    outcome: {
+      type: String,
+      enum: ["PASS", "LOW_CONFIDENCE", "FAIL", ""],
+      default: "",
+    },
+    confidence: { type: Number, default: 0, min: 0, max: 1 },
+    checkedAt: { type: Date, default: null },
+    reasons: { type: [String], default: [] },
+    checkedBy: { type: String, default: "" },
   },
   /** Set when loyalty accrual runs for this order (Phase 7) */
   loyaltyPointsEarned: { type: Number, default: null },

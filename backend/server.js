@@ -38,6 +38,13 @@ import healthRouter from "./routes/healthRoute.js";
 import notificationRouter from "./routes/notificationRoute.js";
 import disputeRouter from "./routes/disputeRoute.js";
 import partnerApiRouter from "./routes/partnerApiRoute.js";
+import verificationRouter from "./routes/verificationRoute.js";
+import kycRouter from "./routes/kycRoute.js";
+import kycWebhookRouter from "./routes/kycWebhookRoute.js";
+import orderChatRouter from "./routes/orderChatRoute.js";
+import chatRouter from "./routes/chatRoute.js";
+import orderRequestRouter from "./routes/orderRequestRoute.js";
+import voiceRouter from "./routes/voiceRoute.js";
 import { initWebsocketServer } from "./realtime/wsHub.js";
 
 // app config
@@ -110,6 +117,10 @@ app.use("/api/admin/users", csrfMiddleware);
 app.use("/api/gdpr", csrfMiddleware);
 app.use("/api/notifications", csrfMiddleware);
 app.use("/api/disputes", csrfMiddleware);
+app.use("/api/order-chat", csrfMiddleware);
+app.use("/api/chat", csrfMiddleware);
+app.use("/api/order-requests", csrfMiddleware);
+app.use("/api/voice", csrfMiddleware);
 
 // DB connection
 connectDB();
@@ -150,6 +161,7 @@ app.use("/api/location", locationRouter);
 app.use("/api/restaurant", restaurantRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/payment/webhook", paymentWebhookRouter);
+app.use("/api/webhooks/kyc", kycWebhookRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/offer", offerRouter);
 app.use("/api/search", searchRouter);
@@ -157,9 +169,15 @@ app.use("/api/search", searchRouter);
 app.use("/api/admin/users", dataMaskingMiddleware({ maskForAdmin: true, maskForList: true }));
 app.use("/api/admin/users", userManagementRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/verification", verificationRouter);
+app.use("/api/kyc", kycRouter);
 app.use("/api/gdpr", gdprRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/disputes", disputeRouter);
+app.use("/api/order-chat", orderChatRouter);
+app.use("/api/chat", chatRouter);
+app.use("/api/order-requests", orderRequestRouter);
+app.use("/api/voice", voiceRouter);
 app.use("/api/partner", partnerApiRouter);
 
 // Error handling middleware for multer file upload errors

@@ -137,8 +137,9 @@ const StoreContextProvider = (props) => {
     setCartLines((prev) => {
       const qty = prev[lineKey] || 0;
       if (qty <= 1) {
-        const { [lineKey]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[lineKey];
+        return next;
       }
       return { ...prev, [lineKey]: qty - 1 };
     });

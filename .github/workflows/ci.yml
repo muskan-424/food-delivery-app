@@ -1,0 +1,141 @@
+# CI for TOMATO — backend tests + frontend/admin build on every PR to main.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-unit:
+    name: Backend unit (Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  backend-integration:
+    name: Backend integration (MongoDB)
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: ci
+          MONGO_INITDB_ROOT_PASSWORD: ci
+    env:
+      RUN_INTEGRATION_TESTS: "true"
+      MONGO_URL: mongodb://ci:ci@localhost:27017/food-delivery-test?authSource=admin
+      JWT_SECRET: ci-test-secret-do-not-use-in-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:integration
+
+  backend-migrate:
+    name: Backend migrations (dry-run)
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: ci
+          MONGO_INITDB_ROOT_PASSWORD: ci
+    env:
+      MONGO_URL: mongodb://ci:ci@localhost:27017/food-delivery-migrate?authSource=admin
+      JWT_SECRET: ci-test-secret-do-not-use-in-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run migrate:up
+      - run: npm run migrate:status
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          VITE_API_URL: http://localhost:4000
+
+  admin:
+    name: Admin (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          VITE_API_URL: http://localhost:4000
+
+  secret-scan:
+    name: Block committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject tracked .env files
+        run: |
+          forbidden=$(git ls-files | grep -E '(^|/)\.env$' | grep -v '\.env\.example' | grep -v '\.env\.staging\.example' | grep -v '\.env\.docker' || true)
+          if [ -n "$forbidden" ]; then
+            echo "ERROR: .env files must not be committed:"
+            echo "$forbidden"
+            exit 1
+          fi
+          echo "No secret .env files in git index."

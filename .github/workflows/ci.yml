@@ -44,6 +44,7 @@ jobs:
       RUN_INTEGRATION_TESTS: "true"
       MONGO_URL: mongodb://ci:ci@localhost:27017/food-delivery-test?authSource=admin
       JWT_SECRET: ci-test-secret-do-not-use-in-production
+      ENCRYPTION_KEY: a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
     defaults:
       run:
         working-directory: backend

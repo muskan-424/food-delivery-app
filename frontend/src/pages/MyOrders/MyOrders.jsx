@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import ReviewModal from "../../components/ReviewModal/ReviewModal";
 import OrderReviewModal from "../../components/OrderReviewModal/OrderReviewModal";
 import OpenDisputeModal from "../../components/OpenDisputeModal/OpenDisputeModal";
+import OrderChatPanel from "../../components/OrderChatPanel/OrderChatPanel";
+import OrderEvidencePanel from "../../components/OrderEvidencePanel/OrderEvidencePanel";
 import { formatCurrency } from "../../utils/currency";
 
 function loadRazorpayScript() {
@@ -92,6 +94,7 @@ const MyOrders = () => {
   const [reviewModal, setReviewModal] = useState({ show: false, foodId: null, foodName: null, orderId: null });
   const [orderReviewModal, setOrderReviewModal] = useState({ show: false, orderId: null, orderItems: [] });
   const [disputeModalOrder, setDisputeModalOrder] = useState(null);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
   const navigate = useNavigate();
 
   const fetchOrders = async (showLoading = true, silent = false) => {
@@ -571,16 +574,25 @@ const MyOrders = () => {
                       Review Items
                     </button>
                   )}
-                  <button 
-                    onClick={() => {
-                      // Navigate to order tracking or show order details
-                      toast.info(`Order ${order.orderNumber || order._id?.slice(-8)} - ${order.status}`);
-                    }}
+                  <button
+                    onClick={() =>
+                      setExpandedOrderId((prev) =>
+                        prev === order._id ? null : order._id
+                      )
+                    }
                     className="track-order-btn"
                   >
-                    View Details
+                    {expandedOrderId === order._id ? "Hide details" : "View details"}
                   </button>
                 </div>
+                {expandedOrderId === order._id && (
+                  <div className="my-orders-expanded">
+                    <OrderChatPanel orderId={order._id} orderStatus={order.status} />
+                    {(order.status === "delivered" || order.status === "out_for_delivery") && (
+                      <OrderEvidencePanel orderId={order._id} />
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

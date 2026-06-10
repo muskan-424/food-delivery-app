@@ -1,0 +1,40 @@
+.voice-input-btn {
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.voice-input-btn:hover:not(:disabled) {
+  border-color: tomato;
+  background: #fff5f2;
+}
+
+.voice-input-btn.recording {
+  border-color: #e53935;
+  background: #ffebee;
+  animation: voice-pulse 1s infinite;
+}
+
+.voice-input-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(229, 57, 53, 0);
+  }
+}
